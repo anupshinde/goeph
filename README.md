@@ -1,0 +1,227 @@
+# goeph
+
+A fast Go library for computing planetary positions from JPL ephemeris files.
+
+**This project was coded by [Claude Opus 4.6](https://claude.ai) (Anthropic's AI model), directed by a human and verified with tests compared to [Skyfield](https://github.com/skyfielders/python-skyfield) (Python) output.** The initial implementation, benchmarking, and validation were completed in a single day. Exact output values do not match Skyfield — there are deviations — but the error margins are documented and acceptable for the author's use case. 
+
+**NOTE:** The code itself is not reviewed manually — the outputs were measured for correctness over very long periods. The golden test harness ensures correctness is measurable, not assumed.
+
+> This README is also maintained by AI (Claude).
+
+---
+
+## Origin & attribution
+
+goeph is a Go library inspired by **[Skyfield](https://github.com/skyfielders/python-skyfield)**, the excellent Python library by Brandon Rhodes for computing positions of stars, planets, and satellites.
+
+- **Skyfield** is the reference implementation. All goeph outputs are validated against Skyfield.
+- goeph is **not affiliated with, endorsed by, or a replacement for** the Skyfield project.
+- The mathematical foundations (IAU nutation/precession models, Chebyshev polynomial evaluation, SPK binary format) are from published standards (IERS Conventions, JPL/NAIF documentation).
+
+If you need authoritative astronomy or Skyfield's full feature set, use [Skyfield](https://github.com/skyfielders/python-skyfield) directly.
+
+---
+
+## Why this exists
+
+I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~10x faster than the Python equivalent for the same computations.
+
+I'm publishing this because someone else is probably looking for the same thing I was.
+
+---
+
+## What it does
+
+- **Loads JPL DE-series ephemeris files** (tested with DE440s; should work with any SPK containing Type 2 segments)
+- **Computes body positions** with light-time correction (Sun, Moon, all planets, Pluto, barycenters)
+- **Converts coordinates** between ICRF, ecliptic, RA/Dec, geodetic frames
+- **Handles time scales** (UTC → TT → UT1, leap seconds, delta-T)
+- **Computes sidereal time** (GMST, GAST with nutation correction)
+- **Transforms geodetic positions** to celestial coordinates (WGS84, nutation, precession)
+- **Computes lunar node longitudes** (Meeus formula — not part of Skyfield, added separately)
+- **Propagates satellites** via SGP4 (wraps go-satellite)
+
+## What it doesn't do
+
+- No apparent positions (no relativistic deflection or aberration)
+- No altaz computation
+- No sunrise/sunset, moon phases, or event searching
+- No star catalog loading
+- No velocity computation
+- No SPK Type 3/13/21 support
+- Nutation uses top 30 IAU 2000A terms (not all 687) — sufficient for sub-arcsecond work, not micro-arcsecond
+
+Contributions for any of these are welcome — see "Project status & support" below.
+
+---
+
+## Quick start
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/anupshinde/goeph/coord"
+    "github.com/anupshinde/goeph/spk"
+    "github.com/anupshinde/goeph/timescale"
+)
+
+func main() {
+    // Load the included ephemeris file
+    eph, err := spk.Open("data/de440s.bsp")
+    if err != nil {
+        panic(err)
+    }
+
+    // Pick a time
+    t := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+    jdUTC := timescale.TimeToJDUTC(t)
+    tdbJD := timescale.UTCToTT(jdUTC) // TDB ≈ TT for our purposes
+
+    // Get Moon's position (light-time corrected, ICRF frame, km)
+    pos := eph.Observe(spk.Moon, tdbJD)
+
+    // Convert to ecliptic latitude/longitude
+    lat, lon := coord.ICRFToEcliptic(pos[0], pos[1], pos[2])
+    fmt.Printf("Moon ecliptic: lat=%.6f° lon=%.6f°\n", lat, lon)
+
+    // Get Mars position
+    mars := eph.Observe(spk.MarsBarycenter, tdbJD)
+    marsLat, marsLon := coord.ICRFToEcliptic(mars[0], mars[1], mars[2])
+    fmt.Printf("Mars ecliptic: lat=%.6f° lon=%.6f°\n", marsLat, marsLon)
+}
+```
+
+See `examples/` for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+
+---
+
+## Installation
+
+```bash
+go get github.com/anupshinde/goeph
+```
+
+An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also download others from NASA:
+- [de440s.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp) (~32 MB, 1849-2150) — included & tested
+- [de421.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.bsp) (~17 MB, 1900-2050) — untested
+- [de440.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp) (~115 MB, 1550-2650) — untested
+
+---
+
+## Packages
+
+| Package | Import | What it does |
+|---------|--------|-------------|
+| `spk` | `goeph/spk` | SPK/DAF ephemeris file parser, Chebyshev polynomial evaluation, light-time corrected positions |
+| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, GMST/GAST, nutation (IAU 2000A), precession (IAU 2006) |
+| `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T table (1800-2200) |
+| `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point computation |
+| `star` | `goeph/star` | Fixed star coordinates (Galactic Center) |
+| `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
+
+---
+
+## Supported bodies
+
+All bodies available in DE-series ephemeris files:
+
+| Body | ID | Notes |
+|------|----|-------|
+| Sun | 10 | |
+| Moon | 301 | |
+| Mercury | 199 | Via Mercury Barycenter chain |
+| Venus | 299 | Via Venus Barycenter chain |
+| Mars Barycenter | 4 | |
+| Jupiter Barycenter | 5 | |
+| Saturn Barycenter | 6 | |
+| Uranus Barycenter | 7 | |
+| Neptune Barycenter | 8 | |
+| Pluto Barycenter | 9 | |
+| Earth | 399 | |
+| Earth-Moon Barycenter | 3 | |
+| Planet Barycenters | 1-9 | Direct segments vs SSB |
+
+---
+
+## Validation against Skyfield
+
+goeph outputs are verified against Skyfield (Python) using a golden-test approach:
+
+1. A Python script runs Skyfield for a diverse set of inputs (varied dates, all bodies, edge cases)
+2. Outputs are saved as JSON golden files at full float64 precision
+3. Go tests read the golden files and compare goeph results within documented tolerances
+
+| Computation | Expected tolerance | Notes |
+|------------|-------------------|-------|
+| SPK positions (ICRF) | < 1e-6 km | Deterministic Chebyshev evaluation |
+| Ecliptic lat/lon | < 1e-10° | Pure rotation matrix |
+| UTC→TT conversion | exact | Same leap second table |
+| TT→UT1 conversion | < 1e-12 days | Same delta-T table |
+| GMST/GAST | < 1e-8° | Same polynomial coefficients |
+| Precession matrix | < 1e-14 | Same IAU 2006 coefficients |
+| Light-time correction | < 1e-6 km | Same iterative algorithm |
+| Nutation (30 vs 687 terms) | ~1 arcsecond | Known gap, documented |
+
+The nutation gap is the main known deviation from Skyfield. It uses 30 terms where Skyfield uses 687. For sub-arcsecond work this is fine; for micro-arcsecond precision, the full model would need to be ported.
+
+---
+
+## Known limitations
+
+1. **SPK Type 2 only** — rejects non-Type-2 segments. All JPL DE-series files use Type 2. Asteroid/comet BSP files (Type 3, 13, 21) are not supported.
+2. **Hardcoded body chains** — `bodyWrtSSB()` has a switch for known bodies. Unknown bodies will panic. Skyfield handles this generically via segment graph walking.
+3. **No apparent positions** — light-time correction is applied, but not gravitational deflection or aberration (~1.7 arcsec near Sun).
+4. **No velocity** — only positions are computed.
+5. **30-term nutation** — sub-arcsecond, not micro-arcsecond.
+
+---
+
+## Project status & support
+
+This is a **personal research artifact published as-is.**
+
+- No guaranteed support, response time, or roadmap.
+- I use this myself. If it breaks for my use case, I'll fix it.
+- PRs are accepted if they:
+  - Pass golden tests
+  - Reduce error vs Skyfield, or improve performance without increasing error
+  - Don't expand scope without strong justification
+
+If you need a maintained, production-grade library, fork it and own it for your use case.
+
+---
+
+## Forks & alternatives
+
+If you build something better — more complete, faster, more accurate — I'm happy to link to it. Open a PR or issue with a link to your project.
+
+---
+
+## AI disclosure
+
+This project was **coded by Claude Opus 4.6** (Anthropic), with human direction, review, and verification. Specifically:
+
+- The Go implementation of Skyfield-inspired algorithms was done by Claude
+- Benchmarking and output comparison against Skyfield was done collaboratively
+- The golden test strategy ensures correctness is verifiable regardless of how the code was written
+
+The code is the code. The tests are the tests. Judge it by its outputs.
+
+---
+
+## License
+
+MIT — same as Skyfield.
+
+---
+
+## Acknowledgements
+
+- **[Skyfield](https://github.com/skyfielders/python-skyfield)** by Brandon Rhodes — the reference implementation this project validates against. Excellent library; use it if Python works for your use case.
+- **[JPL/NAIF](https://naif.jpl.nasa.gov/)** — for the SPK ephemeris format and DE-series planetary ephemeris data.
+- **[Claude Opus 4.6](https://claude.ai)** (Anthropic) — AI that wrote the Go implementation.
+- **[go-satellite](https://github.com/joshuaferrara/go-satellite)** — SGP4 propagation library used for satellite computations.
