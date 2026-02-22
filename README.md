@@ -167,6 +167,11 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 
 The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to ~0.03° (~113 arcsec) at the extremes of the 300-year test range. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
 
+In addition to golden tests, the [`validation/`](validation/) directory contains Go and Python data generators that produce identical CSV outputs over a 200-year range, with a comparison script to verify column-by-column accuracy. See:
+
+- [`docs/BENCHMARK_GO_VS_PYTHON.md`](docs/BENCHMARK_GO_VS_PYTHON.md) — detailed timing and accuracy benchmarks (~14x faster than Python/Skyfield)
+- [`docs/PYTHON_SKYFIELD_TO_GO.md`](docs/PYTHON_SKYFIELD_TO_GO.md) — how the Python→Go port was done and the math behind it
+
 ---
 
 ## Known limitations

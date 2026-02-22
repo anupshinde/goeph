@@ -10,6 +10,7 @@
 
 # Go build output
 /goeph
+validation/generate_data_go/generate_data_go
 
 # OS files
 .DS_Store
@@ -28,7 +29,6 @@ Thumbs.db
 # Temp/output
 temp/
 temp_todos.md
-examples
 
 # Python
 __pycache__/
