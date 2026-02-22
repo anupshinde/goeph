@@ -28,4 +28,8 @@ Thumbs.db
 # Temp/output
 temp/
 temp_todos.md
-examples/
+examples
+
+# Coverage
+*.out
+coverage.html

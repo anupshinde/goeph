@@ -151,22 +151,21 @@ All bodies available in DE-series ephemeris files:
 
 goeph outputs are verified against Skyfield (Python) using a golden-test approach:
 
-1. A Python script runs Skyfield for a diverse set of inputs (varied dates, all bodies, edge cases)
+1. A Python script (`testdata/generate_golden.py`) runs Skyfield for 3,653 dates at 30-day increments across the full DE440s range (1850–2149), covering all 10 bodies, 6 geographic locations, timescale conversions, GMST, and lunar nodes
 2. Outputs are saved as JSON golden files at full float64 precision
 3. Go tests read the golden files and compare goeph results within documented tolerances
+4. CI runs all tests automatically on push/PR via GitHub Actions
 
-| Computation | Expected tolerance | Notes |
+| Computation | Measured tolerance | Notes |
 |------------|-------------------|-------|
-| SPK positions (ICRF) | < 1e-6 km | Deterministic Chebyshev evaluation |
-| Ecliptic lat/lon | < 1e-10° | Pure rotation matrix |
-| UTC→TT conversion | exact | Same leap second table |
-| TT→UT1 conversion | < 1e-12 days | Same delta-T table |
-| GMST/GAST | < 1e-8° | Same polynomial coefficients |
-| Precession matrix | < 1e-14 | Same IAU 2006 coefficients |
-| Light-time correction | < 1e-6 km | Same iterative algorithm |
-| Nutation (30 vs 687 terms) | ~1 arcsecond | Known gap, documented |
+| SPK positions (ICRF) | < 0.2 km | Mercury worst case (barycenter chain); most bodies < 0.01 km |
+| UTC→TT conversion | < 1e-9 days | Same leap second table |
+| TT→UT1 conversion | < 2e-6 days | Linear interpolation vs Skyfield's spline for delta-T |
+| GMST | < 1e-3° | goeph uses IAU 1982 (Meeus); Skyfield uses IERS 2000 ERA-based |
+| Geodetic→ecliptic | < 0.035° | 30-term nutation gap grows with distance from J2000 |
+| Lunar nodes | < 1e-8° | Identical Meeus formula |
 
-The nutation gap is the main known deviation from Skyfield. It uses 30 terms where Skyfield uses 687. For sub-arcsecond work this is fine; for micro-arcsecond precision, the full model would need to be ported.
+The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to ~0.03° (~113 arcsec) at the extremes of the 300-year test range. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
 
 ---
 
