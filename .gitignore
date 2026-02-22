@@ -30,6 +30,10 @@ temp/
 temp_todos.md
 examples
 
+# Python
+__pycache__/
+*.pyc
+
 # Coverage
 *.out
 coverage.html
