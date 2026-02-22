@@ -27,7 +27,7 @@ If you need authoritative astronomy or Skyfield's full feature set, use [Skyfiel
 
 ## Why this exists
 
-I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~10x faster than the Python equivalent for the same computations.
+I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~14x faster than the Python equivalent for the same computations.
 
 I'm publishing this because someone else is probably looking for the same thing I was.
 
