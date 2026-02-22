@@ -21,7 +21,7 @@ def get_dates_df(startDate, endDate):
     startDateStr = startDate.date().isoformat()
     endDateStr = endDate.date().isoformat()
     df = pd.DataFrame()
-    df["Time"] = pd.date_range(start=startDateStr, end=endDateStr, freq='1D',tz='UTC')
+    df["Time"] = pd.date_range(start=startDateStr, end=endDateStr, freq='1h',tz='UTC')
     return df
 
 def main():

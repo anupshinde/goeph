@@ -47,7 +47,7 @@ func generateTimeSeries(start, end time.Time) []time.Time {
 	t := startDate
 	for !t.After(endDate) {
 		times = append(times, t)
-		t = t.Add(24 * time.Hour)
+		t = t.Add(1 * time.Hour)
 	}
 	return times
 }

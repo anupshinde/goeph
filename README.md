@@ -95,7 +95,7 @@ func main() {
 }
 ```
 
-See `examples/` for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
