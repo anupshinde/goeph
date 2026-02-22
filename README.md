@@ -1,5 +1,8 @@
 # goeph
 
+[![Tests](https://github.com/anupshinde/goeph/actions/workflows/test.yml/badge.svg)](https://github.com/anupshinde/goeph/actions/workflows/test.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/anupshinde/goeph)](https://goreportcard.com/report/github.com/anupshinde/goeph)
+
 A fast Go library for computing planetary positions from JPL ephemeris files.
 
 **This project was coded by [Claude Opus 4.6](https://claude.ai) (Anthropic's AI model), directed by a human and verified with tests compared to [Skyfield](https://github.com/skyfielders/python-skyfield) (Python) output.** The initial implementation, benchmarking, and validation were completed in a single day. Exact output values do not match Skyfield — there are deviations — but the error margins are documented and acceptable for the author's use case. 
