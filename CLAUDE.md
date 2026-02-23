@@ -25,7 +25,7 @@ The project requires Go 1.22+. Single external dependency: `github.com/joshuafer
 
 The library is organized as independent packages with no circular dependencies:
 
-- **`spk/`** — Core package. Parses JPL SPK/DAF binary ephemeris files (Type 2 segments only). Evaluates Chebyshev polynomials via Clenshaw algorithm. Provides `Observe()` for light-time corrected geocentric positions and `GeocentricPosition()` for geometric positions. All positions are in km, ICRF frame. Body lookups use a hardcoded `bodyWrtSSB()` switch (not a generic segment graph walker like Skyfield).
+- **`spk/`** — Core package. Parses JPL SPK/DAF binary ephemeris files (Type 2 segments only). Evaluates Chebyshev polynomials via Clenshaw algorithm. Provides `Observe()` for light-time corrected geocentric positions and `GeocentricPosition()` for geometric positions. All positions are in km, ICRF frame. Body lookups use a generic segment graph walker that builds chains at `Open()` time. Supports temporal stacking (multiple segments for the same body pair covering different date ranges).
 - **`coord/`** — Coordinate transforms: ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF. Includes IAU 2006 precession, IAU 2000A nutation (top 30 terms only), GMST/GAST sidereal time, and WGS84 geodetic conversion.
 - **`timescale/`** — Time scale chain: UTC→TT (via hardcoded leap second table + 32.184s) → UT1 (via hardcoded delta-T table, 1800–2200). Converts `time.Time` to Julian dates.
 - **`satellite/`** — Thin wrapper around `go-satellite` for SGP4 propagation.
@@ -41,7 +41,7 @@ The library is organized as independent packages with no circular dependencies:
 ### Key design decisions
 
 - Nutation uses only 30 of 687 IAU 2000A terms (~1 arcsecond precision, not micro-arcsecond)
-- `bodyWrtSSB()` panics on unknown body IDs — only supports bodies listed in `spk/bodies.go`
+- `bodyWrtSSB()` panics if the requested body is not present in the loaded SPK file
 - Leap second and delta-T tables are hardcoded arrays, not loaded from external files
 - No velocity computation, no apparent positions (no aberration/deflection)
 
