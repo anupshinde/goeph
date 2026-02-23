@@ -355,7 +355,7 @@ func TestVelocityGolden(t *testing.T) {
 	// Skyfield's astrometric.velocity is the rate of change of the astrometric
 	// position vector: body_vel(t - lightTime) - earth_vel(t).
 	// We use observe() to get the light time, then compute light-time corrected velocity.
-	const tol = 0.01 // km/day tolerance (with TDB-TT correction; measured max ~0.0002 km/day)
+	const tol = 0.005 // km/day tolerance (with TDB-TT correction; measured max ~0.0002 km/day)
 	failures := 0
 	for i, tc := range golden.Tests {
 		_, lightTime := eph.observe(Earth, tc.BodyID, tc.TDBJD)

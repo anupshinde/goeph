@@ -176,7 +176,9 @@ func TestMoonPhasesGolden(t *testing.T) {
 	t.Logf("event count: got %d, golden %d (diff %+d)", len(events), len(golden.Tests), countDiff)
 
 	// Match each golden event to nearest goeph event.
-	const tolDays = 1.0
+	// Relative longitude cancels J2000 vs ecliptic-of-date frame difference,
+	// so agreement is much tighter than seasons (~seconds, not hours).
+	const tolDays = 3.0 / (24 * 60) // 3 minutes (measured max ~4 seconds)
 	wantTimes := make([]float64, len(golden.Tests))
 	wantValues := make([]int, len(golden.Tests))
 	for i, g := range golden.Tests {
@@ -184,8 +186,8 @@ func TestMoonPhasesGolden(t *testing.T) {
 		wantValues[i] = g.Phase
 	}
 	matched, valMismatch, maxDiff := matchEvents(events, wantTimes, wantValues, tolDays)
-	t.Logf("matched %d/%d golden events, %d value mismatches, max diff %.6f days (%.1f hours)",
-		matched, len(golden.Tests), valMismatch, maxDiff, maxDiff*24)
+	t.Logf("matched %d/%d golden events, %d value mismatches, max diff %.6f days (%.1f sec)",
+		matched, len(golden.Tests), valMismatch, maxDiff, maxDiff*86400)
 
 	// At least 99% should match.
 	minMatch := len(golden.Tests) * 99 / 100
@@ -215,7 +217,7 @@ func TestSunriseSunsetGolden(t *testing.T) {
 	t.Logf("event count: got %d, golden %d (diff %+d)", len(events), len(golden.Tests), countDiff)
 
 	// Match each golden event to nearest goeph event.
-	const tolDays = 5.0 / (24 * 60) // 5 minutes
+	const tolDays = 3.0 / (24 * 60) // 3 minutes (measured max ~1 second)
 	wantTimes := make([]float64, len(golden.Tests))
 	wantValues := make([]int, len(golden.Tests))
 	for i, g := range golden.Tests {
@@ -251,7 +253,7 @@ func TestTwilightGolden(t *testing.T) {
 	t.Logf("event count: got %d, golden %d (diff %+d)", len(events), len(golden.Tests), countDiff)
 
 	// Match each golden event to nearest goeph event.
-	const tolDays = 10.0 / (24 * 60) // 10 minutes
+	const tolDays = 3.0 / (24 * 60) // 3 minutes (measured max ~1 second)
 	wantTimes := make([]float64, len(golden.Tests))
 	wantValues := make([]int, len(golden.Tests))
 	for i, g := range golden.Tests {
@@ -287,7 +289,8 @@ func TestOppositionsConjunctionsGolden(t *testing.T) {
 		t.Fatalf("got %d events, want %d", len(events), len(golden.Tests))
 	}
 
-	const tolDays = 1.0
+	// Relative longitude cancels frame difference, so agreement is tight (~seconds).
+	const tolDays = 3.0 / (24 * 60) // 3 minutes (measured max ~46 seconds)
 	maxDiff := 0.0
 	failures := 0
 	for i := range events {
@@ -303,13 +306,13 @@ func TestOppositionsConjunctionsGolden(t *testing.T) {
 		}
 		if diff > tolDays {
 			if failures < 10 {
-				t.Errorf("event %d: T diff = %.6f days (%.1f hours)", i, diff, diff*24)
+				t.Errorf("event %d: T diff = %.6f days (%.1f sec)", i, diff, diff*86400)
 			}
 			failures++
 		}
 	}
-	t.Logf("max time diff: %.6f days (%.1f hours), %d failures out of %d events",
-		maxDiff, maxDiff*24, failures, len(events))
+	t.Logf("max time diff: %.6f days (%.1f sec), %d failures out of %d events",
+		maxDiff, maxDiff*86400, failures, len(events))
 }
 
 // --- Unit tests (no golden data) ---
