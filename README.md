@@ -33,10 +33,15 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 
 - **Loads JPL DE-series ephemeris files** (tested with DE440s; should work with any SPK containing Type 2 segments)
 - **Computes body positions** with light-time correction (Sun, Moon, all planets, Pluto, barycenters)
-- **Converts coordinates** between ICRF, ecliptic, RA/Dec, geodetic frames
-- **Handles time scales** (UTC → TT → UT1, leap seconds, delta-T)
-- **Computes sidereal time** (GMST, GAST with nutation correction)
+- **Converts coordinates** between ICRF, ecliptic, RA/Dec, geodetic, and galactic frames
+- **Handles time scales** (UTC → TT → UT1, leap seconds, delta-T, TDB-TT)
+- **Computes sidereal time** (GMST, GAST with nutation correction, Earth Rotation Angle)
 - **Transforms geodetic positions** to celestial coordinates (WGS84, nutation, precession)
+- **Computes angular quantities** — separation angle, phase angle, fraction illuminated, position angle, elongation
+- **Atmospheric refraction** — Bennett's formula for altitude correction
+- **Unit types** — `Angle` (degrees, hours, radians, DMS, HMS) and `Distance` (km, AU, meters, light-seconds)
+- **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), ICRS-to-J2000 bias matrices
+- **Geometric computations** — line-sphere intersection for shadow/limb checks
 - **Computes lunar node longitudes** (Meeus formula — not part of Skyfield, added separately)
 - **Propagates satellites** via SGP4 (wraps go-satellite)
 
@@ -94,7 +99,7 @@ func main() {
 }
 ```
 
-See [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`examples/`](examples/) for 13 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
@@ -116,8 +121,10 @@ An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also do
 | Package | Import | What it does |
 |---------|--------|-------------|
 | `spk` | `goeph/spk` | SPK/DAF ephemeris file parser, Chebyshev polynomial evaluation, light-time corrected positions |
-| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, GMST/GAST, nutation (IAU 2000A), precession (IAU 2006) |
-| `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T table (1800-2200) |
+| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, galactic, GMST/GAST/ERA, nutation (IAU 2000A), precession (IAU 2006), separation/phase/position angles, elongation, refraction |
+| `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T table (1800-2200), TDB-TT |
+| `units` | `goeph/units` | `Angle` and `Distance` types with unit conversions (degrees, hours, radians, DMS/HMS, km, AU, light-seconds) |
+| `geometry` | `goeph/geometry` | Line-sphere intersection (for shadow/limb geometry) |
 | `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point computation |
 | `star` | `goeph/star` | Fixed star coordinates (Galactic Center) |
 | `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
@@ -163,6 +170,12 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 | GMST | < 1e-3° | goeph uses IAU 1982 (Meeus); Skyfield uses IERS 2000 ERA-based |
 | Geodetic→ecliptic | < 0.035° | 30-term nutation gap grows with distance from J2000 |
 | Lunar nodes | < 1e-8° | Identical Meeus formula |
+| ERA | < 1e-8° | Exact same IAU 2000 formula |
+| TDB-TT | < 1e-9 s | Same Fairhead & Bretagnon terms |
+| Separation angle | < 1e-8° | Same position vectors, same formula |
+| Phase angle | < 0.5° | Barycentric vs astrometric vector reconstruction |
+| Elongation | < 1e-10° | Pure modular arithmetic |
+| Refraction | < 1e-10° | Same Bennett 1982 formula |
 
 The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to ~0.03° (~113 arcsec) at the extremes of the 300-year test range. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
 

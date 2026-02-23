@@ -10,6 +10,7 @@ goeph is a Go library for computing planetary positions from JPL SPK ephemeris f
 
 ```bash
 make build                        # build all packages
+make build-examples               # compile-check all examples
 make test                         # run all tests
 make test-v                       # run all tests (verbose)
 make cover                        # run tests with coverage summary
@@ -26,11 +27,14 @@ The project requires Go 1.22+. Single external dependency: `github.com/joshuafer
 The library is organized as independent packages with no circular dependencies:
 
 - **`spk/`** — Core package. Parses JPL SPK/DAF binary ephemeris files (Type 2 segments only). Evaluates Chebyshev polynomials via Clenshaw algorithm. Provides `Observe()` for light-time corrected geocentric positions and `GeocentricPosition()` for geometric positions. All positions are in km, ICRF frame. Body lookups use a generic segment graph walker that builds chains at `Open()` time. Supports temporal stacking (multiple segments for the same body pair covering different date ranges).
-- **`coord/`** — Coordinate transforms: ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF. Includes IAU 2006 precession, IAU 2000A nutation (top 30 terms only), GMST/GAST sidereal time, and WGS84 geodetic conversion.
-- **`timescale/`** — Time scale chain: UTC→TT (via hardcoded leap second table + 32.184s) → UT1 (via hardcoded delta-T table, 1800–2200). Converts `time.Time` to Julian dates.
+- **`coord/`** — Coordinate transforms: ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, ICRF↔galactic. Includes IAU 2006 precession, IAU 2000A nutation (top 30 terms only), GMST/GAST/ERA sidereal time, WGS84 geodetic conversion, atmospheric refraction (Bennett 1982), angular quantities (separation, phase, position angle, elongation, fraction illuminated), and frame rotation matrices (Galactic, B1950, ICRS-to-J2000 bias).
+- **`timescale/`** — Time scale chain: UTC→TT (via hardcoded leap second table + 32.184s) → UT1 (via hardcoded delta-T table, 1800–2200). TDB-TT difference (Fairhead & Bretagnon). Converts `time.Time` to Julian dates.
+- **`units/`** — `Angle` type (degrees, hours, radians, arcminutes, arcseconds, DMS, HMS) and `Distance` type (km, AU, meters, light-seconds).
+- **`geometry/`** — Line-sphere intersection for shadow/limb computations.
 - **`satellite/`** — Thin wrapper around `go-satellite` for SGP4 propagation.
 - **`star/`** — Fixed star coordinates (currently only Galactic Center).
 - **`lunarnodes/`** — Mean lunar node ecliptic longitude computation (Meeus formula).
+- **`examples/`** — 13 runnable examples covering the full API (see `examples/README.md`).
 
 ### Data flow for a typical computation
 
@@ -57,3 +61,9 @@ Actual tolerances vs Skyfield (discovered during test development):
 - GMST: <1e-3° (goeph uses IAU 1982 Meeus formula; Skyfield uses IERS 2000 ERA-based)
 - Geodetic→ecliptic: <0.035° (30-term vs 687-term nutation; gap grows with distance from J2000)
 - Lunar nodes: <1e-8° (identical Meeus formula)
+- ERA: <1e-8° (exact same IAU 2000 formula)
+- TDB-TT: <1e-9 seconds (exact same Fairhead & Bretagnon terms)
+- Separation angle: <1e-8° (same position vectors, same formula)
+- Phase angle: <0.5° (barycentric vs astrometric vector reconstruction)
+- Elongation: <1e-10° (pure modular arithmetic, matches exactly)
+- Refraction: <1e-10° (same Bennett 1982 formula, same 0.016667 constant)
