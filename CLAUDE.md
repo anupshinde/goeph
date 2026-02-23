@@ -39,8 +39,10 @@ The library is organized as independent packages with no circular dependencies:
 - **`star/`** — `Star` type with proper motion (RA/Dec rates), parallax, and radial velocity propagation from catalog epoch. `PositionAU()`, `PositionKm()`, `RADec()` methods. Also provides `GalacticCenterICRF()` direction.
 - **`kepler/`** — Keplerian orbit propagation for asteroids and comets. `Orbit` type supports elliptic (Newton-Raphson), parabolic (Barker's equation), and hyperbolic orbits. Elements in J2000 ecliptic frame, output in ICRF. Supports both asteroid (a, e, M0) and comet (q, e, Tp) element sets.
 - **`eclipse/`** — Lunar eclipse detection. `FindLunarEclipses()` finds penumbral, partial, and total eclipses in a date range. Computes umbral/penumbral shadow cone radii with Danjon 2% enlargement, eclipse magnitudes, and closest approach.
+- **`projection/`** — Stereographic projection of sky positions onto a 2D plane for star charts. `NewProjector()` creates a projection centered at any direction, `Project()` maps 3D positions to 2D coordinates. Conformal (angle-preserving).
+- **`constellation/`** — IAU constellation identification. `At(raHours, decDeg)` returns the 3-letter abbreviation. Grid-based binary search lookup using embedded boundary data from CDS catalog VI/42 (Roman 1987). `Name()` and `Abbreviation()` convert between abbreviations and full names.
 - **`lunarnodes/`** — Mean lunar node ecliptic longitude computation (Meeus formula).
-- **`examples/`** — 22 runnable examples covering the full API (see `examples/README.md`).
+- **`examples/`** — 24 runnable examples covering the full API (see `examples/README.md`).
 
 ### Data flow for a typical computation
 
@@ -74,4 +76,4 @@ Summary of tolerances vs Skyfield:
 - Geodetic→ecliptic: <0.025° (light-time in Skyfield's observe())
 - ERA: <1e-8°, TDB-TT: <1e-9 s, Separation: <1e-8°, Elongation: <1e-10°, Refraction: <1e-10°
 - Phase angle: <1e-8° (exact vectors), Lunar nodes: <1e-8°
-- Almanac: seasons <1 day, moon phases <1 day, sunrise/sunset <5 min, twilight <10 min, oppositions <1 day (J2000 vs ecliptic-of-date frame difference)
+- Almanac: seasons <1 day, moon phases <3 min, sunrise/sunset <3 min, twilight <3 min, oppositions <3 min

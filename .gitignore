@@ -29,7 +29,6 @@ Thumbs.db
 # Temp/output
 temp/
 temp_todos.md
-next.md
 
 # Python
 __pycache__/
