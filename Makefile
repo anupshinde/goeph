@@ -2,7 +2,7 @@
 
 # Build all packages (excluding examples)
 build:
-	go build ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/
+	go build ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/
 
 # Build examples (compile check only)
 build-examples:
@@ -10,15 +10,15 @@ build-examples:
 
 # Run all tests
 test:
-	go test ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/
+	go test ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/
 
 # Run all tests with verbose output
 test-v:
-	go test -v ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/
+	go test -v ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/
 
 # Run tests with coverage and print summary
 cover:
-	go test -coverprofile=coverage.out ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/
+	go test -coverprofile=coverage.out ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/
 	go tool cover -func=coverage.out
 
 # Generate HTML coverage report
@@ -28,7 +28,7 @@ cover-html: cover
 
 # Run go vet
 vet:
-	go vet ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/
+	go vet ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/
 
 # Run a single test by name: make test-one TEST=TestObserveGolden PKG=./spk/
 test-one:
