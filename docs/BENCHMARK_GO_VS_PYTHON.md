@@ -487,6 +487,8 @@ The residual 0.031° (at London, the highest-latitude location) comes from yearl
 
 The speedup is **~11–14x at scale** (>44k rows) and narrows to ~4.7–8.3x for smaller datasets where fixed costs dominate.
 
+**Nutation mode note:** These benchmarks use the default `NutationStandard` (30 terms). Skyfield always uses the full 1365-term IAU 2000A nutation series. With `NutationFull` (matching Skyfield's precision), end-to-end workloads that include altaz/geodetic computations are ~5-7x slower, reducing the speedup to **~2-3x** vs Skyfield. Position-only workloads (`Observe`, `Apparent`, coordinate conversions) are unaffected by the nutation setting and retain the full ~14x speedup. The ~1 arcsec difference between the two modes is negligible for most applications — see [Nutation precision](../README.md#nutation-precision).
+
 ---
 
 ## Analysis
@@ -505,7 +507,7 @@ The speedup is **~11–14x at scale** (>44k rows) and narrows to ~4.7–8.3x for
 
 ## Numerical Accuracy
 
-The speedup comes with no meaningful loss in accuracy:
+The speedup comes with no meaningful loss in accuracy. Core position computations (SPK Chebyshev evaluation, apparent positions) are identical in both Go and Python — the same math, same polynomials, same coefficients. Nutation mode does not affect these computations.
 
 | Component | Max Error (Bench 1–2, near present) | Max Error (Bench 3–5, 200–248yr) |
 |-----------|-------------------------------------|----------------------------------|

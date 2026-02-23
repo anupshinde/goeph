@@ -21,7 +21,7 @@ If you need authoritative astronomy or Skyfield's full feature set, use [Skyfiel
 
 ## Why this exists
 
-I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~14x faster than the Python equivalent for the same computations.
+I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~14x faster than the Python equivalent for the same computations (with the default 30-term nutation; ~2-3x faster with full 1365-term nutation matching Skyfield's precision — see [Nutation precision](#nutation-precision)).
 
 I'm publishing this because someone else is probably looking for the same thing I was.
 
@@ -155,7 +155,9 @@ coord.SetNutationPrecision(coord.NutationFull)
 coord.SetNutationPrecision(coord.NutationStandard)
 ```
 
-**When to use which:** In both modes, the dominant error sources are light-time correction (~20 arcsec) and GMST formula difference (~0.3 arcsec/century), which dwarf the nutation precision difference. Use `NutationFull` only when you need sub-arcsecond nutation accuracy or exact Skyfield parity. For batch workloads (millions of rows), `NutationStandard` is ~70x faster with negligible accuracy loss.
+**When to use which:** Nutation only affects functions that use equator-of-date transforms (`Altaz`, `HourAngleDec`, `GeodeticToICRF`, `TEMEToICRF`, `ITRFFrame`). Position computations (`Observe`, `Apparent`, coordinate conversions) are unaffected by this setting. In both modes, the dominant error sources are light-time correction (~20 arcsec) and GMST formula difference (~0.3 arcsec/century), which dwarf the nutation precision difference. Use `NutationFull` only when you need sub-arcsecond nutation accuracy or exact Skyfield parity.
+
+**Performance impact:** `NutationFull` is ~70x slower per nutation call (~10.5 μs vs ~150 ns). In end-to-end workloads that include altaz/geodetic computations, this translates to ~5-7x slower overall (nutation is one step among many). With `NutationStandard`, goeph is ~14x faster than Skyfield; with `NutationFull`, ~2-3x faster. Since Skyfield always uses the full 1365-term series, `NutationFull` is the apples-to-apples comparison — but the ~1 arcsec difference from `NutationStandard` is negligible for most applications.
 
 Call `SetNutationPrecision` once at program startup. It is not safe for concurrent use with different precision needs.
 
@@ -217,7 +219,7 @@ The remaining deviations from Skyfield are primarily due to: (1) light-time corr
 
 In addition to golden tests, the [`validation/`](validation/) directory contains Go and Python data generators that produce identical CSV outputs over a 200-year range, with a comparison script to verify column-by-column accuracy. See:
 
-- [`docs/BENCHMARK_GO_VS_PYTHON.md`](docs/BENCHMARK_GO_VS_PYTHON.md) — detailed timing and accuracy benchmarks (~14x faster than Python/Skyfield)
+- [`docs/BENCHMARK_GO_VS_PYTHON.md`](docs/BENCHMARK_GO_VS_PYTHON.md) — detailed timing and accuracy benchmarks (~14x faster with default nutation; ~2-3x with full nutation parity)
 - [`docs/PYTHON_SKYFIELD_TO_GO.md`](docs/PYTHON_SKYFIELD_TO_GO.md) — how the Python→Go port was done and the math behind it
 
 ---
