@@ -362,6 +362,45 @@ func TestLocationStruct(t *testing.T) {
 	}
 }
 
+func TestNutationPrecisionToggle(t *testing.T) {
+	// Verify the getter/setter works
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+
+	SetNutationPrecision(NutationStandard)
+	if GetNutationPrecision() != NutationStandard {
+		t.Error("expected NutationStandard")
+	}
+	SetNutationPrecision(NutationFull)
+	if GetNutationPrecision() != NutationFull {
+		t.Error("expected NutationFull")
+	}
+}
+
+func TestNutationModesAgree(t *testing.T) {
+	// Both modes should agree to within ~1 arcsec
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+
+	for _, T := range []float64{0, 0.5, -1.0, 1.5} {
+		SetNutationPrecision(NutationStandard)
+		dpsiStd, depsStd := nutationAngles(T)
+
+		SetNutationPrecision(NutationFull)
+		dpsiFull, depsFull := nutationAngles(T)
+
+		dpsiDiffArcsec := math.Abs(dpsiStd-dpsiFull) / arcsec2rad
+		depsDiffArcsec := math.Abs(depsStd-depsFull) / arcsec2rad
+
+		if dpsiDiffArcsec > 1.5 {
+			t.Errorf("T=%.1f: dpsi diff = %.4f arcsec (want < 1.5)", T, dpsiDiffArcsec)
+		}
+		if depsDiffArcsec > 1.5 {
+			t.Errorf("T=%.1f: deps diff = %.4f arcsec (want < 1.5)", T, depsDiffArcsec)
+		}
+	}
+}
+
 func BenchmarkICRFToEcliptic(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ICRFToEcliptic(1e8, -5e7, 2e7)
@@ -374,16 +413,40 @@ func BenchmarkGAST(b *testing.B) {
 	}
 }
 
+func BenchmarkNutationAnglesStandard(b *testing.B) {
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+	SetNutationPrecision(NutationStandard)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nutationAngles(0.5)
+	}
+}
+
+func BenchmarkNutationAnglesFull(b *testing.B) {
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+	SetNutationPrecision(NutationFull)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nutationAngles(0.5)
+	}
+}
+
 // TestGeodeticToEcliptic_Golden tests the full geodetic→ICRF→ecliptic pipeline
 // against Skyfield golden data. This is the end-to-end accuracy test.
-// goeph uses 30-term nutation vs Skyfield's 687 terms.
-// The nutation gap grows with distance from J2000. Over a 300-year range,
-// max deviation reaches ~0.03° (~113 arcsec). This is a documented limitation.
+// Residual error (~0.02°) is mainly from Skyfield's observe() applying
+// light-time correction to surface locations.
 func TestGeodeticToEcliptic_Golden(t *testing.T) {
+	// Use full nutation for golden test comparison against Skyfield
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+	SetNutationPrecision(NutationFull)
+
 	var golden goldenLocations
 	loadJSON(t, "../testdata/golden_locations.json", &golden)
 
-	const tolerance = 0.035 // degrees
+	const tolerance = 0.025 // degrees (residual from light-time correction in Skyfield's observe())
 
 	var maxLatErr, maxLonErr float64
 	failures := 0

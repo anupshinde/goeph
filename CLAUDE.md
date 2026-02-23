@@ -27,7 +27,7 @@ The project requires Go 1.22+. Single external dependency: `github.com/joshuafer
 The library is organized as independent packages with no circular dependencies:
 
 - **`spk/`** — Core package. Parses JPL SPK/DAF binary ephemeris files (Type 2 and Type 3 segments). Evaluates Chebyshev polynomials via Clenshaw algorithm. Provides `Observe()`/`ObserveFrom()` for light-time corrected positions, `Apparent()`/`ApparentFrom()` for apparent positions (with aberration + deflection), `GeocentricPosition()` for geometric positions, and `EarthVelocity()` for velocity computation. All positions are in km, ICRF frame. Body lookups use a generic segment graph walker that builds chains at `Open()` time. Supports temporal stacking (multiple segments for the same body pair covering different date ranges).
-- **`coord/`** — Coordinate transforms: ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, ITRF↔geodetic, ICRF↔galactic, altaz, hour angle/declination, TEME↔ICRF. Includes IAU 2006 precession, IAU 2000A nutation (top 30 terms only), GMST/GAST/ERA sidereal time, WGS84 geodetic conversion, atmospheric refraction (Bennett 1982), stellar aberration (full Lorentz), gravitational light deflection (Sun/Jupiter/Saturn), angular quantities (separation, phase, position angle, elongation, fraction illuminated), frame rotation matrices (Galactic, B1950, Ecliptic, ICRS-to-J2000 bias), generic frame types (`InertialFrame`, `TimeBasedFrame`), and visibility checks (`IsSunlit`, `IsBehindEarth`).
+- **`coord/`** — Coordinate transforms: ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, ITRF↔geodetic, ICRF↔galactic, altaz, hour angle/declination, TEME↔ICRF. Includes IAU 2006 precession, full IAU 2000A nutation (678 luni-solar + 687 planetary terms), ICRS→J2000 frame bias, GMST/GAST/ERA sidereal time, WGS84 geodetic conversion, atmospheric refraction (Bennett 1982), stellar aberration (full Lorentz), gravitational light deflection (Sun/Jupiter/Saturn), angular quantities (separation, phase, position angle, elongation, fraction illuminated), frame rotation matrices (Galactic, B1950, Ecliptic, ICRS-to-J2000 bias), generic frame types (`InertialFrame`, `TimeBasedFrame`), and visibility checks (`IsSunlit`, `IsBehindEarth`).
 - **`timescale/`** — Time scale chain: UTC→TT (via hardcoded leap second table + 32.184s) → UT1 (via hardcoded delta-T table with cubic spline interpolation, 1800–2200). TDB-TT difference (Fairhead & Bretagnon). Converts `time.Time` to Julian dates.
 - **`elements/`** — Osculating Keplerian orbital elements from state vectors. 19-field element set supporting circular, elliptical, parabolic, and hyperbolic orbits.
 - **`magnitude/`** — Planetary visual magnitudes using Mallama & Hilton 2018 phase curves (Mercury through Neptune). Includes Saturn ring tilt and Uranus axial tilt geometry.
@@ -36,7 +36,7 @@ The library is organized as independent packages with no circular dependencies:
 - **`satellite/`** — Wrapper around `go-satellite` for SGP4 propagation, with TEME→ICRF conversion for interoperability with planetary positions.
 - **`star/`** — Fixed star coordinates (currently only Galactic Center).
 - **`lunarnodes/`** — Mean lunar node ecliptic longitude computation (Meeus formula).
-- **`examples/`** — 19 runnable examples covering the full API (see `examples/README.md`).
+- **`examples/`** — 20 runnable examples covering the full API (see `examples/README.md`).
 
 ### Data flow for a typical computation
 
@@ -48,7 +48,7 @@ For apparent positions: `spk.Apparent(bodyID, tdbJD)` adds stellar aberration an
 
 ### Key design decisions
 
-- Nutation uses only 30 of 687 IAU 2000A terms (~1 arcsecond precision, not micro-arcsecond)
+- Nutation supports two modes: `NutationStandard` (30 terms, ~150 ns, default) and `NutationFull` (1365 terms, ~10.5 μs) via `SetNutationPrecision`. ICRS→J2000 frame bias applied in both modes
 - `bodyWrtSSB()` panics if the requested body is not present in the loaded SPK file
 - Leap second and delta-T tables are hardcoded arrays, not loaded from external files
 
@@ -62,11 +62,11 @@ Summary of tolerances vs Skyfield:
 
 - SPK positions: <0.01 km (Mercury worst case ~0.002 km)
 - Velocity: <0.01 km/day (measured max ~0.0002 km/day)
-- Apparent positions: <50 km absolute, <1.5e-5 relative (30-term nutation → ~3 arcsec angular error)
-- Altaz: altitude <0.011°, azimuth <0.78°
+- Apparent positions: <50 km absolute, <1.5e-5 relative (light-time in Skyfield's observe())
+- Altaz: altitude <0.005°, azimuth <0.02°
 - UTC→TT: <1e-9 days
 - TT→UT1: <1e-6 days (cubic spline)
-- GMST: <1e-3°
-- Geodetic→ecliptic: <0.035°
+- GMST: <1e-3° (IAU 1982 vs Skyfield's IERS 2000 ERA-based)
+- Geodetic→ecliptic: <0.025° (light-time in Skyfield's observe())
 - ERA: <1e-8°, TDB-TT: <1e-9 s, Separation: <1e-8°, Elongation: <1e-10°, Refraction: <1e-10°
 - Phase angle: <1e-8° (exact vectors), Lunar nodes: <1e-8°

@@ -407,7 +407,7 @@ python main.py  64.69s user 59.82s system 592% cpu 21.022 total
 
 Two fixes were applied to the Go implementation (reflected in Benchmark 3–5 numbers above):
 
-1. **IAU 2000A nutation** (30-term truncation) — adds GAST (true sidereal time) and the nutation rotation matrix N^T to the geodetic→ICRF pipeline.
+1. **IAU 2000A nutation** (30 terms default; full 678 luni-solar + 687 planetary terms available via `NutationFull`) — adds GAST (true sidereal time) and the nutation rotation matrix N^T to the geodetic→ICRF pipeline.
 2. **ΔT time scale model** — proper UTC → TT (via leap second table) → UT1 (via Skyfield-extracted ΔT table with linear interpolation) conversion, replacing the previous UT1 ≈ UTC approximation.
 
 ### Root Cause Analysis
@@ -515,4 +515,4 @@ The speedup comes with no meaningful loss in accuracy:
 | Ground Locations | < 0.018° | < 0.032° |
 | Satellites | varies | up to 180° |
 
-**Note**: Full row-by-row verification was performed across all overlapping timestamps with zero timestamp mismatches. The Go implementation uses IAU 2000A nutation (30-term truncation) and proper ΔT time scale conversion (leap second table + Skyfield-extracted ΔT table). The core math (Chebyshev evaluation, coordinate transforms, precession, nutation) matches Skyfield exactly. The remaining location error (0.018° near-present, 0.032° over 200+ years) is from yearly ΔT interpolation vs Skyfield's daily IERS data.
+**Note**: Full row-by-row verification was performed across all overlapping timestamps with zero timestamp mismatches. The Go implementation uses IAU 2000A nutation (30 terms default, full 1365 terms available via `NutationFull`) and proper ΔT time scale conversion (leap second table + Skyfield-extracted ΔT table). The core math (Chebyshev evaluation, coordinate transforms, precession, nutation) matches Skyfield exactly. The remaining location error (0.018° near-present, 0.032° over 200+ years) is from yearly ΔT interpolation vs Skyfield's daily IERS data.

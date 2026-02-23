@@ -90,10 +90,10 @@ These exact values were extracted by tracing through Skyfield's source code to e
 
 1. Convert WGS84 geodetic (lat, lon) to ITRF Cartesian using the WGS84 ellipsoid (a = 6378.137 km, f = 1/298.257223563).
 2. Rotate from ITRF to true-equinox-of-date frame by GAST (Greenwich Apparent Sidereal Time = GMST + Δψ·cos(ε), where Δψ is the nutation in longitude).
-3. Apply the **inverse nutation matrix** (N^T) using IAU 2000A nutation (30-term truncation: Δψ, Δε from the 30 largest luni-solar terms).
+3. Apply the **inverse nutation matrix** (N^T) using IAU 2000A nutation (30 terms by default; full 678 luni-solar + 687 planetary terms with `NutationFull`).
 4. Apply the **inverse IAU 2006 precession matrix** (P^T) to transform from mean-equinox-of-date to J2000/ICRF.
 
-The full rotation chain is: `ICRF = P^T · N^T · R₃(GAST) · ITRF`.
+The full rotation chain is: `ICRF = B^T · P^T · N^T · R₃(GAST) · ITRF` (where B is the ICRS→J2000 frame bias).
 
 ### Step 6: Other Components
 
@@ -124,7 +124,7 @@ The ground location pipeline went through three stages of refinement:
 
 **Stage 3 — Added nutation + ΔT time scale model (~0.031° max over 248yr)**: Two fixes applied:
 
-1. **IAU 2000A nutation (30-term truncation)**: Implemented the 30 largest luni-solar nutation terms (out of Skyfield's 678), computing Δψ and Δε. Added GAST (= GMST + Δψ·cos(ε)) for the Earth rotation angle, and the nutation rotation matrix N^T in the geodetic→ICRF pipeline. The full rotation is now: `ICRF = P^T · N^T · R₃(GAST) · ITRF`. Nutation itself contributes only ~0.002° improvement — the 30-term truncation captures the dominant terms.
+1. **IAU 2000A nutation** (two modes: 30 largest luni-solar terms by default, or full 678 luni-solar + 687 planetary terms via `coord.SetNutationPrecision(coord.NutationFull)`): Computes Δψ and Δε. Added GAST (= GMST + Δψ·cos(ε)) for the Earth rotation angle, and the nutation rotation matrix N^T in the geodetic→ICRF pipeline. The full rotation is now: `ICRF = B^T · P^T · N^T · R₃(GAST) · ITRF` (where B is the ICRS→J2000 frame bias). The 30 largest terms capture the dominant nutation signal (~0.001 arcsec residual); the full series ensures sub-milliarcsecond accuracy but is ~70x slower.
 
 2. **ΔT time scale model**: The 0.77° error was from treating UT1 ≈ UTC. Skyfield converts UTC → TT (via leap seconds + 32.184s) → UT1 (via ΔT model). Implemented proper conversion using:
    - Leap second table: 28 entries (1972–2017) from IERS Bulletin C

@@ -165,12 +165,21 @@ func ITRFFrame() TimeBasedFrame {
 				}
 			}
 
-			// NP = N * P (J2000 → true equator of date)
-			var NP [3][3]float64
+			// NPB = N * P * B (ICRS → true equator of date via frame bias + precession + nutation)
+			B := ICRSToJ2000Matrix
+			var PB [3][3]float64
 			for i := 0; i < 3; i++ {
 				for j := 0; j < 3; j++ {
 					for k := 0; k < 3; k++ {
-						NP[i][j] += N[i][k] * P[k][j]
+						PB[i][j] += P[i][k] * B[k][j]
+					}
+				}
+			}
+			var NPB [3][3]float64
+			for i := 0; i < 3; i++ {
+				for j := 0; j < 3; j++ {
+					for k := 0; k < 3; k++ {
+						NPB[i][j] += N[i][k] * PB[k][j]
 					}
 				}
 			}
@@ -179,12 +188,12 @@ func ITRFFrame() TimeBasedFrame {
 			gastRad := GAST(jdUT1) * deg2rad
 			sinG, cosG := math.Sincos(gastRad)
 
-			// R = Rz(-GAST) * NP
+			// R = Rz(-GAST) * NPB
 			var R [3][3]float64
 			for j := 0; j < 3; j++ {
-				R[0][j] = cosG*NP[0][j] + sinG*NP[1][j]
-				R[1][j] = -sinG*NP[0][j] + cosG*NP[1][j]
-				R[2][j] = NP[2][j]
+				R[0][j] = cosG*NPB[0][j] + sinG*NPB[1][j]
+				R[1][j] = -sinG*NPB[0][j] + cosG*NPB[1][j]
+				R[2][j] = NPB[2][j]
 			}
 			return R
 		},
