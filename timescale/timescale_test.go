@@ -191,6 +191,67 @@ func TestTTToUT1_Golden(t *testing.T) {
 	}
 }
 
+// goldenTDBTT matches testdata/golden_tdbtt.json.
+type goldenTDBTT struct {
+	Tests []struct {
+		TTJD          float64 `json:"tt_jd"`
+		TDBMinusTTSec float64 `json:"tdb_minus_tt_sec"`
+	} `json:"tests"`
+}
+
+func TestTDBMinusTT_Amplitude(t *testing.T) {
+	// TDB-TT should never exceed ~2ms
+	for year := 1850.0; year <= 2150.0; year += 1.0 {
+		jd := 2451545.0 + (year-2000.0)*365.25
+		dt := TDBMinusTT(jd)
+		if math.Abs(dt) > 0.002 {
+			t.Errorf("TDB-TT at year %.0f = %f s, exceeds 2ms", year, dt)
+		}
+	}
+}
+
+func TestTDBMinusTT_VariesWithTime(t *testing.T) {
+	dt1 := TDBMinusTT(2451545.0)
+	dt2 := TDBMinusTT(2451545.0 + 182.625) // half year later
+	if dt1 == dt2 {
+		t.Error("TDB-TT unchanged after half year")
+	}
+}
+
+func TestTDBMinusTT_Golden(t *testing.T) {
+	data, err := os.ReadFile("../testdata/golden_tdbtt.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var golden goldenTDBTT
+	if err := json.Unmarshal(data, &golden); err != nil {
+		t.Fatal(err)
+	}
+
+	const tol = 1e-9 // seconds; should match exactly (identical formula)
+	failures := 0
+	for i, tc := range golden.Tests {
+		got := TDBMinusTT(tc.TTJD)
+		diff := math.Abs(got - tc.TDBMinusTTSec)
+		if diff > tol {
+			if failures < 10 {
+				t.Errorf("test %d: tt=%.6f got=%.15f want=%.15f diff=%.2e s",
+					i, tc.TTJD, got, tc.TDBMinusTTSec, diff)
+			}
+			failures++
+		}
+	}
+	if failures > 0 {
+		t.Errorf("%d TDB-TT failures out of %d tests (tol=%.0e s)", failures, len(golden.Tests), tol)
+	}
+}
+
+func BenchmarkTDBMinusTT(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		TDBMinusTT(2451545.0 + float64(i))
+	}
+}
+
 func BenchmarkUTCToTT(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		UTCToTT(2451545.0)
