@@ -87,6 +87,61 @@ func TestRADecToICRF(t *testing.T) {
 	}
 }
 
+// goldenERA matches testdata/golden_era.json.
+type goldenERA struct {
+	Tests []struct {
+		UT1JD  float64 `json:"ut1_jd"`
+		ERADeg float64 `json:"era_deg"`
+	} `json:"tests"`
+}
+
+func TestEarthRotationAngle_J2000(t *testing.T) {
+	era := EarthRotationAngle(j2000JD)
+	// ERA at J2000 = 0.7790572732640 * 360 = 280.46... degrees
+	expected := 0.7790572732640 * 360.0
+	expected = math.Mod(expected+math.Mod(j2000JD, 1.0)*360.0, 360.0)
+	if math.Abs(era-expected) > 1e-6 {
+		t.Errorf("ERA at J2000: got %f, want ~%f", era, expected)
+	}
+}
+
+func TestEarthRotationAngle_Range(t *testing.T) {
+	// ERA should always be in [0, 360)
+	for _, jd := range []float64{j2000JD, j2000JD + 0.5, j2000JD - 1000, j2000JD + 50000} {
+		era := EarthRotationAngle(jd)
+		if era < 0 || era >= 360 {
+			t.Errorf("ERA(%.1f) = %f, out of [0, 360)", jd, era)
+		}
+	}
+}
+
+func TestEarthRotationAngle_Golden(t *testing.T) {
+	var golden goldenERA
+	loadJSON(t, "../testdata/golden_era.json", &golden)
+
+	const tol = 1e-8 // degrees; should match Skyfield exactly (identical formula)
+	failures := 0
+	for i, tc := range golden.Tests {
+		got := EarthRotationAngle(tc.UT1JD)
+		diff := got - tc.ERADeg
+		if diff > 180 {
+			diff -= 360
+		} else if diff < -180 {
+			diff += 360
+		}
+		if math.Abs(diff) > tol {
+			if failures < 10 {
+				t.Errorf("test %d: ut1=%.6f got=%.10f want=%.10f diff=%.2e",
+					i, tc.UT1JD, got, tc.ERADeg, diff)
+			}
+			failures++
+		}
+	}
+	if failures > 0 {
+		t.Errorf("%d ERA failures out of %d tests (tol=%.0e°)", failures, len(golden.Tests), tol)
+	}
+}
+
 func TestGMST_J2000(t *testing.T) {
 	gmst := GMST(j2000JD)
 	if math.Abs(gmst-280.46061837) > 0.001 {

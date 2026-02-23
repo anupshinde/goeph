@@ -1,6 +1,9 @@
 package timescale
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // Time scale conversion: UTC → TT → UT1
 //
@@ -449,6 +452,21 @@ var deltaTTable = [401][2]float64{
 	{2198, 216.3653},
 	{2199, 218.0978},
 	{2200, 219.8400},
+}
+
+// TDBMinusTT returns TDB-TT in seconds for a given TDB (or TT) Julian date.
+// Uses the Fairhead & Bretagnon approximation (USNO Circular 179 eq. 2.6).
+// The maximum amplitude is about 1.7 milliseconds. Since TDB and TT never
+// diverge by more than 2ms, TT can also be passed as the argument.
+func TDBMinusTT(jdTDB float64) float64 {
+	t := (jdTDB - 2451545.0) / 36525.0
+	return 0.001657*math.Sin(628.3076*t+6.2401) +
+		0.000022*math.Sin(575.3385*t+4.2970) +
+		0.000014*math.Sin(1256.6152*t+6.1969) +
+		0.000005*math.Sin(606.9777*t+4.0212) +
+		0.000005*math.Sin(52.9691*t+0.4444) +
+		0.000002*math.Sin(21.3299*t+5.5431) +
+		0.000010*t*math.Sin(628.3076*t+4.2490)
 }
 
 // LeapSecondOffset returns TAI-UTC in seconds for a given UTC Julian Date.

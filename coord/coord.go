@@ -105,6 +105,19 @@ func RADecToICRF(raHours, decDeg float64) (x, y, z float64) {
 	return
 }
 
+// EarthRotationAngle returns the Earth Rotation Angle in degrees for a given
+// UT1 Julian date. Uses the formula from IAU Resolution B1.8 of 2000.
+// This is the modern replacement for GMST.
+func EarthRotationAngle(jdUT1 float64) float64 {
+	th := 0.7790572732640 + 0.00273781191135448*(jdUT1-j2000JD)
+	era := math.Mod(th, 1.0) + math.Mod(jdUT1, 1.0)
+	era = math.Mod(era, 1.0)
+	if era < 0 {
+		era += 1.0
+	}
+	return era * 360.0
+}
+
 // GMST returns Greenwich Mean Sidereal Time in degrees for a given UT1 Julian date.
 // Uses the IAU 1982 formula (Meeus).
 func GMST(jdUT1 float64) float64 {
