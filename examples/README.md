@@ -63,6 +63,13 @@ go run ./examples/apparent/
 |---|---|
 | [nutation](nutation/) | Compare NutationStandard vs NutationFull precision modes |
 
+### Sky mapping
+
+| Example | Description |
+|---|---|
+| [projection](projection/) | Stereographic projection of planet positions onto a 2D plane |
+| [constellation](constellation/) | Identify which IAU constellation a planet is in |
+
 ### Other
 
 | Example | Description |

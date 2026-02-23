@@ -56,6 +56,8 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Star positions** — proper motion, parallax, and radial velocity propagation from catalog epoch to any date
 - **Kepler orbit propagation** — elliptic, parabolic, and hyperbolic orbits for asteroids and comets
 - **Lunar eclipse detection** — finds penumbral, partial, and total lunar eclipses with magnitudes and shadow geometry
+- **Stereographic projection** — project sky positions onto a 2D plane for star charts (conformal, preserves angles)
+- **Constellation identification** — identify which of the 88 IAU constellations contains a given RA/Dec position (grid-based binary search lookup)
 
 ## What it doesn't do
 
@@ -108,7 +110,7 @@ func main() {
 }
 ```
 
-See [`examples/`](examples/) for 22 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`examples/`](examples/) for 24 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
@@ -142,6 +144,8 @@ An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also do
 | `star` | `goeph/star` | Star positions with proper motion, parallax, and radial velocity propagation; Galactic Center ICRF direction |
 | `kepler` | `goeph/kepler` | Keplerian orbit propagation for asteroids and comets (elliptic, parabolic, hyperbolic) |
 | `eclipse` | `goeph/eclipse` | Lunar eclipse detection: penumbral, partial, and total eclipses with magnitudes |
+| `projection` | `goeph/projection` | Stereographic projection of sky positions onto a 2D plane for star charts |
+| `constellation` | `goeph/constellation` | IAU constellation identification from RA/Dec (88 constellations, grid-based binary search) |
 | `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
 
 ---
@@ -220,11 +224,11 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 | Elongation | < 1e-10° | Pure modular arithmetic |
 | Refraction | < 1e-10° | Same Bennett 1982 formula |
 | Lunar nodes | < 1e-8° | Identical Meeus formula |
-| Seasons | < 1 day | J2000 ecliptic vs ecliptic of date |
-| Moon phases | < 1 day | J2000 ecliptic vs ecliptic of date |
-| Sunrise/sunset | < 5 min | Nutation/frame differences |
-| Twilight | < 10 min | Most sensitive to nutation/frame |
-| Oppositions | < 1 day | J2000 ecliptic vs ecliptic of date |
+| Seasons | < 1 day | J2000 ecliptic vs Skyfield's ecliptic of date (~18 hours) |
+| Moon phases | < 3 min | Relative longitude cancels frame difference (measured max ~4 sec) |
+| Sunrise/sunset | < 3 min | Altaz chain; no ecliptic frame dependency (measured max ~1 sec) |
+| Twilight | < 3 min | Altaz chain; extra events from finer step size (measured max ~1 sec) |
+| Oppositions | < 3 min | Relative longitude cancels frame difference (measured max ~46 sec) |
 
 See [`testdata/README.md`](testdata/README.md) for the full tolerance breakdown with error sources.
 
