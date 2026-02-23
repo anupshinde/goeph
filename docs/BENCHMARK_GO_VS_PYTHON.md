@@ -487,7 +487,7 @@ The residual 0.031° (at London, the highest-latitude location) comes from yearl
 
 The speedup is **~11–14x at scale** (>44k rows) and narrows to ~4.7–8.3x for smaller datasets where fixed costs dominate.
 
-**Nutation mode note:** These benchmarks use the default `NutationStandard` (30 terms). Skyfield always uses the full 1365-term IAU 2000A nutation series. With `NutationFull` (matching Skyfield's precision), end-to-end workloads that include altaz/geodetic computations are ~5-7x slower, reducing the speedup to **~2-3x** vs Skyfield. Position-only workloads (`Observe`, `Apparent`, coordinate conversions) are unaffected by the nutation setting and retain the full ~14x speedup. The ~1 arcsec difference between the two modes is negligible for most applications — see [Nutation precision](../README.md#nutation-precision).
+**Nutation mode note:** These benchmarks use the default `NutationStandard` (30 terms). Skyfield defaults to the full IAU 2000A series (678 luni-solar + 687 planetary terms) but also provides an `iau2000b()` variant (77 luni-solar, 0 planetary) for faster computation. With goeph's `NutationFull` (matching Skyfield's default precision), end-to-end workloads that include altaz/geodetic computations are ~5-7x slower, reducing the speedup to **~2-3x** vs Skyfield. Position-only workloads (`Observe`, `Apparent`, coordinate conversions) are unaffected by the nutation setting and retain the full ~14x speedup. The ~1 arcsec difference between the two modes is negligible for most applications — see [Nutation precision](../README.md#nutation-precision).
 
 ---
 

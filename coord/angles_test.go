@@ -159,8 +159,8 @@ func TestPhaseAngle_Golden(t *testing.T) {
 	loadJSON(t, "../testdata/golden_phase.json", &golden)
 
 	// With exact input vectors from Skyfield, tolerance is limited only by
-	// floating-point arithmetic in the angle formula itself.
-	const tol = 1e-8 // degrees
+	// floating-point arithmetic in the angle formula itself (measured max ~6e-14°).
+	const tol = 1e-10 // degrees
 	failures := 0
 	maxDiff := 0.0
 
