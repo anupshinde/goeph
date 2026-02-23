@@ -52,6 +52,145 @@ func init() {
 	}
 }
 
+// InertialFrame is a static (time-independent) reference frame defined by a
+// rotation matrix from ICRF. Examples include the Galactic frame, B1950, and
+// the ecliptic. Apply the rotation matrix to an ICRF vector to get coordinates
+// in this frame.
+type InertialFrame struct {
+	Name   string
+	Matrix [3][3]float64 // ICRF → frame rotation matrix
+}
+
+// XYZ applies the frame rotation to an ICRF position vector, returning
+// Cartesian coordinates in this frame.
+func (f InertialFrame) XYZ(posICRF [3]float64) [3]float64 {
+	m := f.Matrix
+	return [3]float64{
+		m[0][0]*posICRF[0] + m[0][1]*posICRF[1] + m[0][2]*posICRF[2],
+		m[1][0]*posICRF[0] + m[1][1]*posICRF[1] + m[1][2]*posICRF[2],
+		m[2][0]*posICRF[0] + m[2][1]*posICRF[1] + m[2][2]*posICRF[2],
+	}
+}
+
+// LatLon applies the frame rotation to an ICRF position vector, returning
+// latitude and longitude in degrees. Longitude is in [0, 360).
+func (f InertialFrame) LatLon(posICRF [3]float64) (latDeg, lonDeg float64) {
+	v := f.XYZ(posICRF)
+	r := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+	if r == 0 {
+		return 0, 0
+	}
+	latDeg = math.Asin(v[2]/r) * rad2deg
+	lonDeg = math.Mod(math.Atan2(v[1], v[0])*rad2deg+360.0, 360.0)
+	return
+}
+
+// TimeBasedFrame is a time-dependent reference frame defined by a function
+// that returns a rotation matrix from ICRF at a given Julian date.
+// Examples include the true equator of date and the ITRF (Earth-fixed frame).
+type TimeBasedFrame struct {
+	Name     string
+	MatrixAt func(jd float64) [3][3]float64 // ICRF → frame rotation matrix at time jd
+}
+
+// XYZ applies the frame rotation at the given Julian date to an ICRF position
+// vector, returning Cartesian coordinates in this frame.
+func (f TimeBasedFrame) XYZ(posICRF [3]float64, jd float64) [3]float64 {
+	m := f.MatrixAt(jd)
+	return [3]float64{
+		m[0][0]*posICRF[0] + m[0][1]*posICRF[1] + m[0][2]*posICRF[2],
+		m[1][0]*posICRF[0] + m[1][1]*posICRF[1] + m[1][2]*posICRF[2],
+		m[2][0]*posICRF[0] + m[2][1]*posICRF[1] + m[2][2]*posICRF[2],
+	}
+}
+
+// LatLon applies the frame rotation at the given Julian date to an ICRF
+// position vector, returning latitude and longitude in degrees. Longitude is
+// in [0, 360).
+func (f TimeBasedFrame) LatLon(posICRF [3]float64, jd float64) (latDeg, lonDeg float64) {
+	v := f.XYZ(posICRF, jd)
+	r := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+	if r == 0 {
+		return 0, 0
+	}
+	latDeg = math.Asin(v[2]/r) * rad2deg
+	lonDeg = math.Mod(math.Atan2(v[1], v[0])*rad2deg+360.0, 360.0)
+	return
+}
+
+// Predefined InertialFrame instances for common reference frames.
+var (
+	Galactic = InertialFrame{Name: "Galactic", Matrix: GalacticMatrix}
+	B1950    = InertialFrame{Name: "B1950", Matrix: B1950Matrix}
+
+	// Ecliptic is the J2000 mean ecliptic frame. This rotates ICRF around the
+	// X-axis by the J2000 mean obliquity (23.4393°).
+	Ecliptic = InertialFrame{
+		Name: "Ecliptic",
+		Matrix: [3][3]float64{
+			{1, 0, 0},
+			{0, obliquityCos, obliquitySin},
+			{0, -obliquitySin, obliquityCos},
+		},
+	}
+)
+
+// ITRFFrame returns a TimeBasedFrame for the International Terrestrial
+// Reference Frame (Earth-fixed). The jd argument is UT1 Julian date.
+func ITRFFrame() TimeBasedFrame {
+	return TimeBasedFrame{
+		Name: "ITRF",
+		MatrixAt: func(jdUT1 float64) [3][3]float64 {
+			T := (jdUT1 - j2000JD) / 36525.0
+
+			// Precession: J2000 → mean equator of date.
+			// precessionMatrixInverse returns P^T (date→J2000). To go
+			// J2000→date, we use its columns as rows.
+			PT := precessionMatrixInverse(T)
+			var P [3][3]float64
+			for i := 0; i < 3; i++ {
+				for j := 0; j < 3; j++ {
+					P[i][j] = PT[j][i]
+				}
+			}
+
+			// Nutation: mean → true equator of date.
+			dpsiRad, depsRad := nutationAngles(T)
+			epsM := meanObliquity(T)
+			NT := nutationMatrixTranspose(dpsiRad, depsRad, epsM)
+			var N [3][3]float64
+			for i := 0; i < 3; i++ {
+				for j := 0; j < 3; j++ {
+					N[i][j] = NT[j][i]
+				}
+			}
+
+			// NP = N * P (J2000 → true equator of date)
+			var NP [3][3]float64
+			for i := 0; i < 3; i++ {
+				for j := 0; j < 3; j++ {
+					for k := 0; k < 3; k++ {
+						NP[i][j] += N[i][k] * P[k][j]
+					}
+				}
+			}
+
+			// Earth rotation: Rz(-GAST)
+			gastRad := GAST(jdUT1) * deg2rad
+			sinG, cosG := math.Sincos(gastRad)
+
+			// R = Rz(-GAST) * NP
+			var R [3][3]float64
+			for j := 0; j < 3; j++ {
+				R[0][j] = cosG*NP[0][j] + sinG*NP[1][j]
+				R[1][j] = -sinG*NP[0][j] + cosG*NP[1][j]
+				R[2][j] = NP[2][j]
+			}
+			return R
+		},
+	}
+}
+
 // ICRFToGalactic converts an ICRF Cartesian vector to Galactic latitude and
 // longitude in degrees. Longitude is in [0, 360).
 func ICRFToGalactic(x, y, z float64) (latDeg, lonDeg float64) {

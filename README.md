@@ -31,28 +31,33 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 
 ## What it does
 
-- **Loads JPL DE-series ephemeris files** (tested with DE440s; should work with any SPK containing Type 2 segments)
+- **Loads JPL DE-series ephemeris files** (tested with DE440s; supports SPK Type 2 and Type 3 segments)
 - **Computes body positions** with light-time correction (Sun, Moon, all planets, Pluto, barycenters)
-- **Converts coordinates** between ICRF, ecliptic, RA/Dec, geodetic, and galactic frames
-- **Handles time scales** (UTC → TT → UT1, leap seconds, delta-T, TDB-TT)
+- **Apparent positions** — stellar aberration (full Lorentz) + gravitational deflection (Sun/Jupiter/Saturn)
+- **Velocity computation** — Chebyshev polynomial derivatives for body velocities
+- **Arbitrary observer** — observe from any body, not just Earth (`ObserveFrom`, `ApparentFrom`)
+- **Altitude / Azimuth** — for ground observers at any lat/lon, with hour angle / declination
+- **Converts coordinates** between ICRF, ecliptic, RA/Dec, geodetic, ITRF, and galactic frames
+- **Handles time scales** (UTC → TT → UT1, leap seconds, delta-T with cubic spline, TDB-TT)
 - **Computes sidereal time** (GMST, GAST with nutation correction, Earth Rotation Angle)
-- **Transforms geodetic positions** to celestial coordinates (WGS84, nutation, precession)
+- **Transforms geodetic positions** to celestial coordinates (WGS84, nutation, precession) and back (ITRF to geodetic)
 - **Computes angular quantities** — separation angle, phase angle, fraction illuminated, position angle, elongation
+- **Osculating orbital elements** — Keplerian elements from state vectors (elliptical, parabolic, hyperbolic)
+- **Planetary magnitudes** — Mallama & Hilton 2018 phase curves (Mercury through Neptune)
+- **Visibility checks** — is_sunlit, is_behind_earth (shadow/limb geometry)
 - **Atmospheric refraction** — Bennett's formula for altitude correction
 - **Unit types** — `Angle` (degrees, hours, radians, DMS, HMS) and `Distance` (km, AU, meters, light-seconds)
-- **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), ICRS-to-J2000 bias matrices
+- **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
 - **Geometric computations** — line-sphere intersection for shadow/limb checks
 - **Computes lunar node longitudes** (Meeus formula — not part of Skyfield, added separately)
-- **Propagates satellites** via SGP4 (wraps go-satellite)
+- **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion
 
 ## What it doesn't do
 
-- No apparent positions (no relativistic deflection or aberration)
-- No altaz computation
 - No sunrise/sunset, moon phases, or event searching
 - No star catalog loading
-- No velocity computation
-- No SPK Type 3/13/21 support
+- No Kepler orbit propagation (asteroids/comets)
+- No SPK Type 13/21 support
 - Nutation uses top 30 IAU 2000A terms (not all 687) — sufficient for sub-arcsecond work, not micro-arcsecond
 
 Contributions for any of these are welcome — see "Project status & support" below.
@@ -99,7 +104,7 @@ func main() {
 }
 ```
 
-See [`examples/`](examples/) for 13 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`examples/`](examples/) for 19 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
@@ -120,12 +125,14 @@ An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also do
 
 | Package | Import | What it does |
 |---------|--------|-------------|
-| `spk` | `goeph/spk` | SPK/DAF ephemeris file parser, Chebyshev polynomial evaluation, light-time corrected positions |
-| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec↔ICRF, geodetic↔ICRF, galactic, GMST/GAST/ERA, nutation (IAU 2000A), precession (IAU 2006), separation/phase/position angles, elongation, refraction |
-| `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T table (1800-2200), TDB-TT |
+| `spk` | `goeph/spk` | SPK/DAF ephemeris file parser (Type 2 + 3), Chebyshev evaluation, positions (geometric, astrometric, apparent), velocity, arbitrary observer |
+| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec, geodetic↔ICRF↔ITRF, galactic, altaz, hour angle/dec, TEME↔ICRF, GMST/GAST/ERA, nutation, precession, aberration, deflection, angles, refraction, visibility, generic frame types |
+| `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T cubic spline (1800-2200), TDB-TT |
+| `elements` | `goeph/elements` | Osculating Keplerian orbital elements from state vectors |
+| `magnitude` | `goeph/magnitude` | Planetary visual magnitudes (Mallama & Hilton 2018 phase curves) |
 | `units` | `goeph/units` | `Angle` and `Distance` types with unit conversions (degrees, hours, radians, DMS/HMS, km, AU, light-seconds) |
 | `geometry` | `goeph/geometry` | Line-sphere intersection (for shadow/limb geometry) |
-| `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point computation |
+| `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point, TEME→ICRF conversion |
 | `star` | `goeph/star` | Fixed star coordinates (Galactic Center) |
 | `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
 
@@ -157,7 +164,7 @@ All bodies available in DE-series ephemeris files:
 
 goeph outputs are verified against Skyfield (Python) using a golden-test approach:
 
-1. A Python script (`testdata/generate_golden.py`) runs Skyfield for 3,653 dates at 30-day increments across the full DE440s range (1850–2149), covering all 10 bodies, 6 geographic locations, timescale conversions, GMST, and lunar nodes
+1. A Python script (`testdata/generate_golden.py`) runs Skyfield for 3,653 dates at 30-day increments across the full DE440s range (1850–2149), covering 10 bodies, 6 geographic locations, timescale conversions, angular quantities, and more
 2. Outputs are saved as JSON golden files at full float64 precision
 3. Go tests read the golden files and compare goeph results within documented tolerances
 4. CI runs all tests automatically on push/PR via GitHub Actions
@@ -165,19 +172,25 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 | Computation | Measured tolerance | Notes |
 |------------|-------------------|-------|
 | SPK positions (ICRF) | < 0.2 km | Mercury worst case (barycenter chain); most bodies < 0.01 km |
-| UTC→TT conversion | < 1e-9 days | Same leap second table |
-| TT→UT1 conversion | < 2e-6 days | Linear interpolation vs Skyfield's spline for delta-T |
+| Velocity | < 5 km/day | Chebyshev derivative vs Skyfield |
+| Apparent positions | < 50 km abs, < 1.5e-5 relative | 30-term nutation (~3 arcsec angular, scales with distance) |
+| Altitude | < 0.011° | 30-term nutation propagates into Earth rotation |
+| Azimuth | < 0.057° (for \|alt\|<80°) | Near-zenith singularity amplifies to 0.78° at alt=89° |
+| UTC→TT | < 1e-9 days | Same leap second table |
+| TT→UT1 | < 1e-6 days (~65 ms) | Cubic spline vs Skyfield's spline (different source knots) |
 | GMST | < 1e-3° | goeph uses IAU 1982 (Meeus); Skyfield uses IERS 2000 ERA-based |
 | Geodetic→ecliptic | < 0.035° | 30-term nutation gap grows with distance from J2000 |
-| Lunar nodes | < 1e-8° | Identical Meeus formula |
 | ERA | < 1e-8° | Exact same IAU 2000 formula |
 | TDB-TT | < 1e-9 s | Same Fairhead & Bretagnon terms |
 | Separation angle | < 1e-8° | Same position vectors, same formula |
-| Phase angle | < 0.5° | Barycentric vs astrometric vector reconstruction |
+| Phase angle | < 1e-8° | Exact input vectors from Skyfield; formula-level agreement |
 | Elongation | < 1e-10° | Pure modular arithmetic |
 | Refraction | < 1e-10° | Same Bennett 1982 formula |
+| Lunar nodes | < 1e-8° | Identical Meeus formula |
 
-The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to ~0.03° (~113 arcsec) at the extremes of the 300-year test range. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
+See [`testdata/README.md`](testdata/README.md) for the full tolerance breakdown with error sources.
+
+The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to several arcseconds at the extremes of the 300-year test range. This affects apparent positions, altaz, and geodetic transforms. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
 
 In addition to golden tests, the [`validation/`](validation/) directory contains Go and Python data generators that produce identical CSV outputs over a 200-year range, with a comparison script to verify column-by-column accuracy. See:
 
@@ -188,11 +201,11 @@ In addition to golden tests, the [`validation/`](validation/) directory contains
 
 ## Known limitations
 
-1. **SPK Type 2 only** — rejects non-Type-2 segments. All JPL DE-series files use Type 2. Asteroid/comet BSP files (Type 3, 13, 21) are not supported.
-2. **Geocentric only** — `Observe()` and `GeocentricPosition()` use Earth as the observer. Arbitrary observer bodies are not yet supported.
-3. **No apparent positions** — light-time correction is applied, but not gravitational deflection or aberration (~1.7 arcsec near Sun).
-4. **No velocity** — only positions are computed.
-5. **30-term nutation** — sub-arcsecond, not micro-arcsecond.
+1. **SPK Type 2 and 3 only** — rejects other segment types. All JPL DE-series files use Type 2. Some asteroid/comet BSP files use Type 3. Types 13, 21 are not supported.
+2. **30-term nutation** — sub-arcsecond, not micro-arcsecond. This is the dominant error source for coordinate transforms.
+3. **No event searching** — no sunrise/sunset, moon phases, conjunctions, or generic event finding.
+4. **No star catalogs** — only a single hardcoded Galactic Center direction.
+5. **Leap second table frozen at 2017** — new leap seconds require a code update.
 
 ---
 

@@ -173,11 +173,15 @@ func TestUTCToTT_Golden(t *testing.T) {
 func TestTTToUT1_Golden(t *testing.T) {
 	golden := loadGolden(t)
 
-	const tol = 2e-6 // days (~170 ms; delta-T linear interpolation vs Skyfield's spline)
+	const tol = 1e-6 // days (~86 ms; cubic spline delta-T vs Skyfield's spline)
 	failures := 0
+	var maxDiff float64
 	for i, tc := range golden.Tests {
 		got := TTToUT1(tc.TTJD)
 		diff := math.Abs(got - tc.UT1JD)
+		if diff > maxDiff {
+			maxDiff = diff
+		}
 		if diff > tol {
 			if failures < 10 {
 				t.Errorf("test %d: TT=%.10f got UT1=%.10f want=%.10f diff=%.2e days",
@@ -186,6 +190,7 @@ func TestTTToUT1_Golden(t *testing.T) {
 			failures++
 		}
 	}
+	t.Logf("TTToUT1: maxDiff=%.2e days (%.3f ms)", maxDiff, maxDiff*SecPerDay*1000)
 	if failures > 0 {
 		t.Errorf("%d TTToUT1 failures out of %d tests", failures, len(golden.Tests))
 	}

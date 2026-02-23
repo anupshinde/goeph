@@ -145,10 +145,12 @@ func TestFractionIlluminated_Values(t *testing.T) {
 // goldenPhase matches testdata/golden_phase.json.
 type goldenPhase struct {
 	Tests []struct {
-		TDBJD              float64 `json:"tdb_jd"`
-		BodyName           string  `json:"body_name"`
-		PhaseAngleDeg      float64 `json:"phase_angle_deg"`
-		FractionIlluminate float64 `json:"fraction_illuminated"`
+		TDBJD              float64    `json:"tdb_jd"`
+		BodyName           string     `json:"body_name"`
+		PhaseAngleDeg      float64    `json:"phase_angle_deg"`
+		FractionIlluminate float64    `json:"fraction_illuminated"`
+		ObsToTargetKm      [3]float64 `json:"obs_to_target_km"`
+		SunToTargetKm      [3]float64 `json:"sun_to_target_km"`
 	} `json:"tests"`
 }
 
@@ -156,71 +158,30 @@ func TestPhaseAngle_Golden(t *testing.T) {
 	var golden goldenPhase
 	loadJSON(t, "../testdata/golden_phase.json", &golden)
 
-	// Load SPK position data
-	type spkEntry struct {
-		TDBJD  float64    `json:"tdb_jd"`
-		BodyID int        `json:"body_id"`
-		PosKm  [3]float64 `json:"pos_km"`
-	}
-	var spkData struct {
-		Tests []spkEntry `json:"tests"`
-	}
-	loadJSON(t, "../testdata/golden_spk.json", &spkData)
-
-	type key struct {
-		tdb    float64
-		bodyID int
-	}
-	posMap := make(map[key][3]float64)
-	for _, e := range spkData.Tests {
-		posMap[key{e.TDBJD, e.BodyID}] = e.PosKm
-	}
-
-	bodyNameToID := map[string]int{
-		"moon": 301, "mercury": 199, "venus": 299,
-		"mars": 4, "jupiter": 5, "saturn": 6,
-	}
-
-	// Phase angle tolerance: Skyfield uses barycentric observer position internally
-	// while we reconstruct sun-to-target from astrometric vectors. Small differences
-	// can arise from the observer barycentric reconstruction. Use a generous tolerance.
-	const tol = 0.5 // degrees
+	// With exact input vectors from Skyfield, tolerance is limited only by
+	// floating-point arithmetic in the angle formula itself.
+	const tol = 1e-8 // degrees
 	failures := 0
-	tested := 0
+	maxDiff := 0.0
 
 	for _, tc := range golden.Tests {
-		bodyID, ok := bodyNameToID[tc.BodyName]
-		if !ok {
-			continue
-		}
-		sunPos, ok1 := posMap[key{tc.TDBJD, 10}]
-		bodyPos, ok2 := posMap[key{tc.TDBJD, bodyID}]
-		if !ok1 || !ok2 {
-			continue
-		}
-
-		// sunToTarget = bodyPos - sunPos (observer-to-target minus observer-to-sun)
-		sunToTarget := [3]float64{
-			bodyPos[0] - sunPos[0],
-			bodyPos[1] - sunPos[1],
-			bodyPos[2] - sunPos[2],
-		}
-
-		got := PhaseAngle(bodyPos, sunToTarget)
+		got := PhaseAngle(tc.ObsToTargetKm, tc.SunToTargetKm)
 		diff := math.Abs(got - tc.PhaseAngleDeg)
+		if diff > maxDiff {
+			maxDiff = diff
+		}
 		if diff > tol {
 			if failures < 10 {
-				t.Errorf("%s tdb=%.6f: got=%.6f want=%.6f diff=%.4f",
+				t.Errorf("%s tdb=%.6f: got=%.6f want=%.6f diff=%.10f°",
 					tc.BodyName, tc.TDBJD, got, tc.PhaseAngleDeg, diff)
 			}
 			failures++
 		}
-		tested++
 	}
 	if failures > 0 {
-		t.Errorf("%d phase angle failures out of %d tests (tol=%.1f°)", failures, tested, tol)
+		t.Errorf("%d phase angle failures out of %d tests (tol=%.0e°)", failures, len(golden.Tests), tol)
 	}
-	t.Logf("Phase angle: tested=%d failed=%d", tested, failures)
+	t.Logf("Phase angle: %d tests, maxDiff=%.2e°", len(golden.Tests), maxDiff)
 }
 
 func TestPositionAngle_NorthSouth(t *testing.T) {
