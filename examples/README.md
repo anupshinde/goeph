@@ -41,12 +41,21 @@ go run ./examples/apparent/
 | [elongation](elongation/) | Moon elongation from Sun and lunar phase names |
 | [refraction](refraction/) | Atmospheric refraction correction at various altitudes |
 
+### Event search and almanac
+
+| Example | Description |
+|---|---|
+| [search](search/) | Find season changes (equinoxes/solstices) using FindDiscrete |
+| [almanac](almanac/) | Sunrise/sunset, moon phases, and seasons for a ground observer |
+| [eclipse](eclipse/) | Find lunar eclipses and classify them (penumbral/partial/total) |
+
 ### Orbital mechanics and photometry
 
 | Example | Description |
 |---|---|
 | [elements](elements/) | Osculating orbital elements from state vectors |
 | [magnitude](magnitude/) | Planetary visual magnitudes (Mallama & Hilton 2018) |
+| [kepler](kepler/) | Kepler orbit propagation for asteroids and comets |
 
 ### Configuration
 

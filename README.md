@@ -50,13 +50,17 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
 - **Geometric computations** — line-sphere intersection for shadow/limb checks
 - **Computes lunar node longitudes** (Meeus formula — not part of Skyfield, added separately)
-- **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion
+- **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion and rise/culmination/set event finding
+- **Event search** — generic discrete event finding (bisection) and extrema finding (golden section) for time-series data
+- **Almanac** — sunrise/sunset, twilight levels, moon phases, seasons, body risings/settings, meridian transits, oppositions/conjunctions
+- **Star positions** — proper motion, parallax, and radial velocity propagation from catalog epoch to any date
+- **Kepler orbit propagation** — elliptic, parabolic, and hyperbolic orbits for asteroids and comets
+- **Lunar eclipse detection** — finds penumbral, partial, and total lunar eclipses with magnitudes and shadow geometry
 
 ## What it doesn't do
 
-- No sunrise/sunset, moon phases, or event searching
-- No star catalog loading
-- No Kepler orbit propagation (asteroids/comets)
+- No solar eclipse computation
+- No star catalog file loading (Hipparcos/Tycho-2 parsers)
 - No SPK Type 13/21 support
 - GMST uses IAU 1982 formula (Skyfield uses IERS 2000 ERA-based) — introduces ~0.3 arcsec/century drift
 
@@ -104,7 +108,7 @@ func main() {
 }
 ```
 
-See [`examples/`](examples/) for 20 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`examples/`](examples/) for 22 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
@@ -132,8 +136,12 @@ An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also do
 | `magnitude` | `goeph/magnitude` | Planetary visual magnitudes (Mallama & Hilton 2018 phase curves) |
 | `units` | `goeph/units` | `Angle` and `Distance` types with unit conversions (degrees, hours, radians, DMS/HMS, km, AU, light-seconds) |
 | `geometry` | `goeph/geometry` | Line-sphere intersection (for shadow/limb geometry) |
-| `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point, TEME→ICRF conversion |
-| `star` | `goeph/star` | Fixed star coordinates (Galactic Center) |
+| `search` | `goeph/search` | Generic event search: `FindDiscrete` (bisection), `FindMaxima`/`FindMinima` (golden section) |
+| `almanac` | `goeph/almanac` | Sunrise/sunset, twilight, moon phases, seasons, body risings/settings, transits, oppositions/conjunctions |
+| `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point, TEME→ICRF conversion, rise/culmination/set event finding |
+| `star` | `goeph/star` | Star positions with proper motion, parallax, and radial velocity propagation; Galactic Center ICRF direction |
+| `kepler` | `goeph/kepler` | Keplerian orbit propagation for asteroids and comets (elliptic, parabolic, hyperbolic) |
+| `eclipse` | `goeph/eclipse` | Lunar eclipse detection: penumbral, partial, and total eclipses with magnitudes |
 | `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
 
 ---
@@ -212,6 +220,11 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 | Elongation | < 1e-10° | Pure modular arithmetic |
 | Refraction | < 1e-10° | Same Bennett 1982 formula |
 | Lunar nodes | < 1e-8° | Identical Meeus formula |
+| Seasons | < 1 day | J2000 ecliptic vs ecliptic of date |
+| Moon phases | < 1 day | J2000 ecliptic vs ecliptic of date |
+| Sunrise/sunset | < 5 min | Nutation/frame differences |
+| Twilight | < 10 min | Most sensitive to nutation/frame |
+| Oppositions | < 1 day | J2000 ecliptic vs ecliptic of date |
 
 See [`testdata/README.md`](testdata/README.md) for the full tolerance breakdown with error sources.
 
@@ -228,9 +241,8 @@ In addition to golden tests, the [`validation/`](validation/) directory contains
 
 1. **SPK Type 2 and 3 only** — rejects other segment types. All JPL DE-series files use Type 2. Some asteroid/comet BSP files use Type 3. Types 13, 21 are not supported.
 2. **GMST uses IAU 1982 formula** — differs from Skyfield's IERS 2000 ERA-based GMST by ~0.3 arcsec/century.
-3. **No event searching** — no sunrise/sunset, moon phases, conjunctions, or generic event finding.
-4. **No star catalogs** — only a single hardcoded Galactic Center direction.
-5. **Leap second table frozen at 2017** — new leap seconds require a code update.
+3. **No star catalog file loading** — the `Star` type supports proper motion propagation, but there are no Hipparcos/Tycho-2 file parsers yet.
+4. **Leap second table frozen at 2017** — new leap seconds require a code update.
 
 ---
 
