@@ -27,8 +27,8 @@ All tolerances are measured max error vs Skyfield across the full date range.
 
 | Golden file | Test | Tolerance | Measured max | Units | Error source |
 |---|---|---|---|---|---|
-| `golden_spk.json` | SPK positions | 0.2 | ~0.15 | km | Mercury barycenter chain rounding |
-| `golden_velocity.json` | Velocity | 5.0 | ~4.5 | km/day | Chebyshev derivative vs Skyfield |
+| `golden_spk.json` | SPK positions | 0.01 | ~0.002 | km | Mercury barycenter chain (with TDB-TT correction) |
+| `golden_velocity.json` | Velocity | 0.01 | ~0.0002 | km/day | Chebyshev derivative (with TDB-TT correction) |
 | `golden_apparent.json` | Apparent positions | max(50, 1.5e-5 * dist) | ~27,000 km abs | km | 30-term nutation (~3 arcsec angular error, scales with distance) |
 
 ### Time scales

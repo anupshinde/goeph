@@ -60,8 +60,8 @@ See `testdata/README.md` for the full tolerance table, sampling strategy, and er
 
 Summary of tolerances vs Skyfield:
 
-- SPK positions: <0.2 km
-- Velocity: <5 km/day
+- SPK positions: <0.01 km (Mercury worst case ~0.002 km)
+- Velocity: <0.01 km/day (measured max ~0.0002 km/day)
 - Apparent positions: <50 km absolute, <1.5e-5 relative (30-term nutation → ~3 arcsec angular error)
 - Altaz: altitude <0.011°, azimuth <0.78°
 - UTC→TT: <1e-9 days
