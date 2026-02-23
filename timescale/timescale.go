@@ -458,6 +458,7 @@ var deltaTTable = [401][2]float64{
 // Uses the Fairhead & Bretagnon approximation (USNO Circular 179 eq. 2.6).
 // The maximum amplitude is about 1.7 milliseconds. Since TDB and TT never
 // diverge by more than 2ms, TT can also be passed as the argument.
+// NOTE: This formula is duplicated in spk/spk.go (tdbMinusTT) to avoid circular imports.
 func TDBMinusTT(jdTDB float64) float64 {
 	t := (jdTDB - 2451545.0) / 36525.0
 	return 0.001657*math.Sin(628.3076*t+6.2401) +

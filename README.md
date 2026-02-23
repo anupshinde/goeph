@@ -171,8 +171,8 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 
 | Computation | Measured tolerance | Notes |
 |------------|-------------------|-------|
-| SPK positions (ICRF) | < 0.2 km | Mercury worst case (barycenter chain); most bodies < 0.01 km |
-| Velocity | < 5 km/day | Chebyshev derivative vs Skyfield |
+| SPK positions (ICRF) | < 0.01 km | Mercury worst case ~0.002 km (with TDB-TT correction) |
+| Velocity | < 0.01 km/day | Chebyshev derivative ~0.0002 km/day (with TDB-TT correction) |
 | Apparent positions | < 50 km abs, < 1.5e-5 relative | 30-term nutation (~3 arcsec angular, scales with distance) |
 | Altitude | < 0.011° | 30-term nutation propagates into Earth rotation |
 | Azimuth | < 0.057° (for \|alt\|<80°) | Near-zenith singularity amplifies to 0.78° at alt=89° |

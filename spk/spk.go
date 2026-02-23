@@ -190,7 +190,7 @@ func (s *SPK) segPosition(target, center int, tdbJD float64) [3]float64 {
 		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
 	}
 
-	seconds := (tdbJD - j2000JD) * secPerDay
+	seconds := (tdbJD - j2000JD) * secPerDay + tdbMinusTT(tdbJD)
 
 	// Find the segment covering this epoch
 	seg := findSegment(segs, seconds)
@@ -424,6 +424,20 @@ func (s *SPK) ApparentFrom(observer, target int, tdbJD float64) [3]float64 {
 	return position
 }
 
+// tdbMinusTT returns TDB-TT in seconds for a given JD (TT or TDB).
+// Fairhead & Bretagnon approximation (USNO Circular 179 eq. 2.6).
+// Duplicated from timescale.TDBMinusTT to avoid circular dependency.
+func tdbMinusTT(jd float64) float64 {
+	t := (jd - 2451545.0) / 36525.0
+	return 0.001657*math.Sin(628.3076*t+6.2401) +
+		0.000022*math.Sin(575.3385*t+4.2970) +
+		0.000014*math.Sin(1256.6152*t+6.1969) +
+		0.000005*math.Sin(606.9777*t+4.0212) +
+		0.000005*math.Sin(52.9691*t+0.4444) +
+		0.000002*math.Sin(21.3299*t+5.5431) +
+		0.000010*t*math.Sin(628.3076*t+4.2490)
+}
+
 // chebyshev evaluates a Chebyshev polynomial using the Clenshaw algorithm.
 // coeffs are the Chebyshev coefficients, s is the normalized time in [-1, 1].
 func chebyshev(coeffs []float64, s float64) float64 {
@@ -486,7 +500,7 @@ func (s *SPK) segVelocity(target, center int, tdbJD float64) [3]float64 {
 		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
 	}
 
-	seconds := (tdbJD - j2000JD) * secPerDay
+	seconds := (tdbJD - j2000JD) * secPerDay + tdbMinusTT(tdbJD)
 	seg := findSegment(segs, seconds)
 
 	idx := int((seconds - seg.init) / seg.intLen)
