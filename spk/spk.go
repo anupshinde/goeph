@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 )
 
 const (
@@ -18,13 +19,22 @@ const (
 // SPK holds a parsed SPK/DAF ephemeris file (supports Type 2 segments only).
 type SPK struct {
 	segments []segment
-	segMap   map[[2]int]*segment // [target, center] → segment
+	segMap   map[[2]int][]*segment // [target, center] → segments (sorted by startSec)
+	chains   map[int][]chainLink   // body ID → chain of segment steps to SSB
+}
+
+// chainLink represents one hop in a body's chain to SSB.
+type chainLink struct {
+	target int
+	center int
 }
 
 type segment struct {
 	target   int
 	center   int
-	init     float64 // initial epoch (TDB seconds past J2000)
+	startSec float64 // segment start epoch (TDB seconds past J2000) from DAF summary
+	endSec   float64 // segment end epoch (TDB seconds past J2000) from DAF summary
+	init     float64 // initial epoch (TDB seconds past J2000) from segment metadata
 	intLen   float64 // interval length (seconds)
 	rsize    int     // record size (doubles per record)
 	n        int     // number of records
@@ -59,7 +69,10 @@ func Open(filename string) (*SPK, error) {
 	summaryDoubles := nd + (ni+1)/2
 	summaryBytes := summaryDoubles * 8
 
-	spk := &SPK{segMap: make(map[[2]int]*segment)}
+	spk := &SPK{
+		segMap: make(map[[2]int][]*segment),
+		chains: make(map[int][]chainLink),
+	}
 
 	// Walk summary record chain starting at FWARD
 	recNum := fward
@@ -81,8 +94,8 @@ func Open(filename string) (*SPK, error) {
 			summary := rec[pos : pos+summaryBytes]
 
 			// Parse doubles
-			// startSec := math.Float64frombits(binary.LittleEndian.Uint64(summary[0:8]))
-			// endSec := math.Float64frombits(binary.LittleEndian.Uint64(summary[8:16]))
+			startSec := math.Float64frombits(binary.LittleEndian.Uint64(summary[0:8]))
+			endSec := math.Float64frombits(binary.LittleEndian.Uint64(summary[8:16]))
 
 			// Parse integers (after ND doubles)
 			intOff := nd * 8
@@ -115,18 +128,21 @@ func Open(filename string) (*SPK, error) {
 
 			// Metadata is in the last 4 words
 			seg := segment{
-				target:  target,
-				center:  center,
-				init:    data[nWords-4],
-				intLen:  data[nWords-3],
-				rsize:   int(data[nWords-2]),
-				n:       int(data[nWords-1]),
-				data:    data[:nWords-4],
+				target:   target,
+				center:   center,
+				startSec: startSec,
+				endSec:   endSec,
+				init:     data[nWords-4],
+				intLen:   data[nWords-3],
+				rsize:    int(data[nWords-2]),
+				n:        int(data[nWords-1]),
+				data:     data[:nWords-4],
 			}
 			seg.nCoeffs = (seg.rsize - 2) / 3
 
 			spk.segments = append(spk.segments, seg)
-			spk.segMap[[2]int{target, center}] = &spk.segments[len(spk.segments)-1]
+			key := [2]int{target, center}
+			spk.segMap[key] = append(spk.segMap[key], &spk.segments[len(spk.segments)-1])
 
 			pos += summaryBytes
 		}
@@ -137,18 +153,36 @@ func Open(filename string) (*SPK, error) {
 		recNum = int(nextRec)
 	}
 
+	// Sort segment slices by startSec for temporal stacking
+	for _, segs := range spk.segMap {
+		sort.Slice(segs, func(i, j int) bool {
+			return segs[i].startSec < segs[j].startSec
+		})
+	}
+
+	// Build and validate chains from every target body to SSB
+	if err := spk.buildChains(); err != nil {
+		return nil, err
+	}
+
 	return spk, nil
 }
 
 // segPosition evaluates a single segment at the given TDB Julian date.
 // Returns position in km, ICRF frame.
+// If multiple segments cover the same (target, center) pair, picks the
+// one whose date range contains the requested epoch.
 func (s *SPK) segPosition(target, center int, tdbJD float64) [3]float64 {
-	seg := s.segMap[[2]int{target, center}]
-	if seg == nil {
+	key := [2]int{target, center}
+	segs := s.segMap[key]
+	if len(segs) == 0 {
 		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
 	}
 
 	seconds := (tdbJD - j2000JD) * secPerDay
+
+	// Find the segment covering this epoch
+	seg := findSegment(segs, seconds)
 
 	// Find record index
 	idx := int((seconds - seg.init) / seg.intLen)
@@ -173,31 +207,109 @@ func (s *SPK) segPosition(target, center int, tdbJD float64) [3]float64 {
 	return pos
 }
 
-// bodyWrtSSB computes a body's position relative to the Solar System Barycenter.
-func (s *SPK) bodyWrtSSB(body int, tdbJD float64) [3]float64 {
-	switch body {
-	case 1, 2, 3, 4, 5, 6, 7, 8, 9, 10:
-		// These have direct segments wrt SSB
-		return s.segPosition(body, 0, tdbJD)
-	case Mercury: // 199 → Mercury Bary (1) → SSB
-		bary := s.segPosition(1, 0, tdbJD)
-		off := s.segPosition(199, 1, tdbJD)
-		return add3(bary, off)
-	case Venus: // 299 → Venus Bary (2) → SSB
-		bary := s.segPosition(2, 0, tdbJD)
-		off := s.segPosition(299, 2, tdbJD)
-		return add3(bary, off)
-	case Moon: // 301 → EMB (3) → SSB
-		emb := s.segPosition(3, 0, tdbJD)
-		off := s.segPosition(301, 3, tdbJD)
-		return add3(emb, off)
-	case Earth: // 399 → EMB (3) → SSB
-		emb := s.segPosition(3, 0, tdbJD)
-		off := s.segPosition(399, 3, tdbJD)
-		return add3(emb, off)
-	default:
-		panic(fmt.Sprintf("spk: unsupported body %d", body))
+// findSegment returns the segment from segs whose [startSec, endSec] range
+// contains the given epoch. Falls back to the nearest boundary segment for
+// out-of-range epochs (preserves existing clamping behavior).
+func findSegment(segs []*segment, seconds float64) *segment {
+	if len(segs) == 1 {
+		return segs[0]
 	}
+	for _, seg := range segs {
+		if seconds >= seg.startSec && seconds <= seg.endSec {
+			return seg
+		}
+	}
+	// Out of range: clamp to first or last segment
+	if seconds < segs[0].startSec {
+		return segs[0]
+	}
+	return segs[len(segs)-1]
+}
+
+// bodyWrtSSB computes a body's position relative to the Solar System Barycenter
+// by summing positions along the pre-computed chain of segments.
+func (s *SPK) bodyWrtSSB(body int, tdbJD float64) [3]float64 {
+	if body == SSB {
+		return [3]float64{}
+	}
+
+	chain, ok := s.chains[body]
+	if !ok {
+		panic(fmt.Sprintf("spk: no chain to SSB for body %d (not in loaded SPK file)", body))
+	}
+
+	var pos [3]float64
+	for _, link := range chain {
+		seg := s.segPosition(link.target, link.center, tdbJD)
+		pos = add3(pos, seg)
+	}
+	return pos
+}
+
+// buildChains pre-computes the chain from each target body to SSB (0).
+// Returns an error if any chain cannot reach SSB or contains a cycle.
+func (s *SPK) buildChains() error {
+	for key := range s.segMap {
+		target := key[0]
+		if _, exists := s.chains[target]; exists {
+			continue // already built (could be built as intermediate of another chain)
+		}
+		if err := s.walkChain(target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// walkChain builds the chain from body to SSB and stores it in s.chains.
+// Also builds chains for any intermediate bodies encountered along the way.
+func (s *SPK) walkChain(body int) error {
+	if body == SSB {
+		return nil
+	}
+
+	// Collect the path, detecting cycles
+	var path []chainLink
+	visited := make(map[int]bool)
+	current := body
+
+	for current != SSB {
+		if visited[current] {
+			return fmt.Errorf("spk: cycle detected in chain for body %d at body %d", body, current)
+		}
+		visited[current] = true
+
+		center, found := s.findCenter(current)
+		if !found {
+			return fmt.Errorf("spk: body %d has no segment (needed in chain for body %d)", current, body)
+		}
+
+		path = append(path, chainLink{target: current, center: center})
+		current = center
+	}
+
+	// Store chains for the target and all intermediates.
+	// E.g. for path [{199,1}, {1,0}]:
+	//   chains[199] = [{199,1}, {1,0}]
+	//   chains[1]   = [{1,0}]
+	for i := range path {
+		b := path[i].target
+		if _, exists := s.chains[b]; !exists {
+			s.chains[b] = path[i:]
+		}
+	}
+
+	return nil
+}
+
+// findCenter returns the center body for a given target.
+func (s *SPK) findCenter(target int) (int, bool) {
+	for key := range s.segMap {
+		if key[0] == target {
+			return key[1], true
+		}
+	}
+	return 0, false
 }
 
 // earthWrtSSB returns Earth's position relative to SSB at tdbJD, in km ICRF.

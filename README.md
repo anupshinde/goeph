@@ -176,7 +176,7 @@ In addition to golden tests, the [`validation/`](validation/) directory contains
 ## Known limitations
 
 1. **SPK Type 2 only** — rejects non-Type-2 segments. All JPL DE-series files use Type 2. Asteroid/comet BSP files (Type 3, 13, 21) are not supported.
-2. **Hardcoded body chains** — `bodyWrtSSB()` has a switch for known bodies. Unknown bodies will panic. Skyfield handles this generically via segment graph walking.
+2. **Geocentric only** — `Observe()` and `GeocentricPosition()` use Earth as the observer. Arbitrary observer bodies are not yet supported.
 3. **No apparent positions** — light-time correction is applied, but not gravitational deflection or aberration (~1.7 arcsec near Sun).
 4. **No velocity** — only positions are computed.
 5. **30-term nutation** — sub-arcsecond, not micro-arcsecond.

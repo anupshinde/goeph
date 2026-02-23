@@ -49,6 +49,9 @@ func TestOpen(t *testing.T) {
 	if len(eph.segMap) == 0 {
 		t.Fatal("expected segMap entries, got none")
 	}
+	if len(eph.chains) == 0 {
+		t.Fatal("expected chains, got none")
+	}
 }
 
 func TestOpenInvalidPath(t *testing.T) {
@@ -254,6 +257,50 @@ func TestOpenNonType2(t *testing.T) {
 	_, err = Open(f.Name())
 	if err == nil {
 		t.Fatal("expected error for non-Type-2 SPK segment")
+	}
+}
+
+func TestChainBuilding(t *testing.T) {
+	eph := openEph(t)
+
+	tests := []struct {
+		body    int
+		name    string
+		wantLen int // number of links in chain
+	}{
+		{Sun, "Sun", 1},               // 10 → 0
+		{MercuryBarycenter, "MBary", 1}, // 1 → 0
+		{Mercury, "Mercury", 2},       // 199 → 1 → 0
+		{Venus, "Venus", 2},           // 299 → 2 → 0
+		{Moon, "Moon", 2},             // 301 → 3 → 0
+		{Earth, "Earth", 2},           // 399 → 3 → 0
+		{MarsBarycenter, "MarsBary", 1}, // 4 → 0
+	}
+
+	for _, tc := range tests {
+		chain, ok := eph.chains[tc.body]
+		if !ok {
+			t.Errorf("%s (body %d): no chain found", tc.name, tc.body)
+			continue
+		}
+		if len(chain) != tc.wantLen {
+			t.Errorf("%s (body %d): chain length = %d, want %d",
+				tc.name, tc.body, len(chain), tc.wantLen)
+		}
+	}
+}
+
+func TestChainReachesSSB(t *testing.T) {
+	eph := openEph(t)
+	for body, chain := range eph.chains {
+		if len(chain) == 0 {
+			t.Errorf("body %d: empty chain", body)
+			continue
+		}
+		lastLink := chain[len(chain)-1]
+		if lastLink.center != SSB {
+			t.Errorf("body %d: chain does not reach SSB; last center = %d", body, lastLink.center)
+		}
 	}
 }
 
