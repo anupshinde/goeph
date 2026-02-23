@@ -50,7 +50,7 @@ Reports per-column and per-category (Planets, Galactic Center, Lunar Nodes, Loca
 | Planets | < 4e-7° | Moon longitude worst case |
 | Galactic Center | < 3e-13° | Effectively exact |
 | Lunar Nodes | < 5e-13° | Effectively exact |
-| Locations | < 0.035° | 30-term nutation + yearly delta-T interpolation vs Skyfield's 687-term + daily IERS data |
+| Locations | < 0.025° | Light-time correction in Skyfield's observe() + GMST formula difference (IAU 1982 vs IERS 2000) + yearly delta-T interpolation. Use `NutationFull` for tightest match |
 | Satellites | up to 180° | SGP4 diverges far from TLE epoch — expected |
 
 See [docs/PYTHON_SKYFIELD_TO_GO.md](../docs/PYTHON_SKYFIELD_TO_GO.md) for implementation details and [docs/BENCHMARK_GO_VS_PYTHON.md](../docs/BENCHMARK_GO_VS_PYTHON.md) for full benchmark results.

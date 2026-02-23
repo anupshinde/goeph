@@ -384,15 +384,13 @@ func TestApparentGolden(t *testing.T) {
 	golden := loadGoldenApparent(t)
 
 	// Apparent positions differ from Skyfield due to:
-	// - Underlying astrometric positions differ by up to 0.2 km
+	// - Underlying astrometric positions differ by up to 0.01 km
 	// - Aberration (~20 arcsec rotation) amplifies direction errors at large distances
-	// - goeph uses 30-term nutation vs Skyfield's 687-term (affects Earth velocity direction)
+	// - Light-time correction in Skyfield's observe() adds ~20 arcsec offset
 	//
-	// The angular error from 30-term nutation grows with centuries from J2000 and
-	// produces absolute km errors proportional to distance. We use a combined
-	// tolerance: max(absTol, relTol * distance) where relTol ~5e-6 (~1 arcsec).
+	// We use a combined tolerance: max(absTol, relTol * distance).
 	const absTol = 50.0  // km — covers nearby bodies (Moon, Sun)
-	const relTol = 1.5e-5 // fractional — covers ~3 arcsec angular error for distant bodies far from J2000
+	const relTol = 1.5e-5 // fractional — covers ~3 arcsec angular error for distant bodies
 	failures := 0
 	maxDiff := 0.0
 	maxRelDiff := 0.0
@@ -620,16 +618,19 @@ func loadGoldenAltaz(t *testing.T) goldenAltaz {
 }
 
 func TestAltazGolden(t *testing.T) {
+	// Use full nutation for golden test comparison against Skyfield
+	original := coord.GetNutationPrecision()
+	defer coord.SetNutationPrecision(original)
+	coord.SetNutationPrecision(coord.NutationFull)
+
 	eph := openEph(t)
 	golden := loadGoldenAltaz(t)
 
 	// The altaz rotation chain (precession + nutation + GAST + local horizon)
-	// differs from Skyfield primarily due to 30-term vs 687-term nutation.
-	// This affects Earth rotation angle, producing angular errors that grow
-	// with centuries from J2000. Expected tolerance: ~0.1° near J2000,
-	// growing to ~1° at the extremes of the date range.
-	const altTol = 1.0 // degrees
-	const azTol = 1.0  // degrees
+	// uses full IAU 2000A nutation and ICRS→J2000 frame bias for this test.
+	// Residual errors come from GMST formula difference and light-time in golden data.
+	const altTol = 0.005 // degrees
+	const azTol = 0.02   // degrees (slightly larger near horizon due to geometry)
 	altFailures := 0
 	azFailures := 0
 	maxAltErr := 0.0

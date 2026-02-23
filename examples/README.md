@@ -48,6 +48,12 @@ go run ./examples/apparent/
 | [elements](elements/) | Osculating orbital elements from state vectors |
 | [magnitude](magnitude/) | Planetary visual magnitudes (Mallama & Hilton 2018) |
 
+### Configuration
+
+| Example | Description |
+|---|---|
+| [nutation](nutation/) | Compare NutationStandard vs NutationFull precision modes |
+
 ### Other
 
 | Example | Description |

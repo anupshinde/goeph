@@ -29,7 +29,7 @@ All tolerances are measured max error vs Skyfield across the full date range.
 |---|---|---|---|---|---|
 | `golden_spk.json` | SPK positions | 0.01 | ~0.002 | km | Mercury barycenter chain (with TDB-TT correction) |
 | `golden_velocity.json` | Velocity | 0.01 | ~0.0002 | km/day | Chebyshev derivative (with TDB-TT correction) |
-| `golden_apparent.json` | Apparent positions | max(50, 1.5e-5 * dist) | ~27,000 km abs | km | 30-term nutation (~3 arcsec angular error, scales with distance) |
+| `golden_apparent.json` | Apparent positions | max(50, 1.5e-5 * dist) | ~27,000 km abs | km | Light-time correction in Skyfield's observe() (~20 arcsec, scales with distance) |
 
 ### Time scales
 
@@ -50,9 +50,9 @@ All tolerances are measured max error vs Skyfield across the full date range.
 
 | Golden file | Test | Tolerance | Measured max | Units | Error source |
 |---|---|---|---|---|---|
-| `golden_locations.json` | Geodetic to ecliptic | 0.035 | ~0.033 | degrees | 30-term vs 687-term nutation; gap grows with centuries from J2000 |
-| `golden_altaz.json` | Altitude | 1.0 | 0.011 | degrees | 30-term nutation propagates into Earth rotation |
-| `golden_altaz.json` | Azimuth | 1.0 | 0.78 (0.057 for \|alt\|<80°) | degrees | Near-zenith singularity amplifies small errors; away from zenith error is <0.06° |
+| `golden_locations.json` | Geodetic to ecliptic | 0.025 | ~0.022 | degrees | Light-time correction in Skyfield's observe() for surface locations |
+| `golden_altaz.json` | Altitude | 0.005 | ~0.0005 | degrees | GMST formula difference (IAU 1982 vs IERS 2000) |
+| `golden_altaz.json` | Azimuth | 0.02 | ~0.010 | degrees | GMST formula + minor near-horizon geometry effects |
 
 ### Angular quantities
 
@@ -69,15 +69,17 @@ All tolerances are measured max error vs Skyfield across the full date range.
 |---|---|---|---|---|---|
 | `golden_lunarnodes.json` | Lunar node longitude | 1e-8 | ~1e-9 | degrees | Identical Meeus formula |
 
-## Dominant error source
+## Dominant error sources
 
-The single largest source of disagreement with Skyfield is **30-term nutation** (goeph) vs **687-term IAU 2000A nutation** (Skyfield). This introduces ~1 arcsecond of angular error near J2000 that:
+**Geodetic→ecliptic and apparent positions (~20 arcsec):** Skyfield's golden data generator uses `observe()` which applies iterative light-time correction even for geographic locations on Earth's surface. During the ~0.02 seconds of light travel (6400 km), Earth's orbital motion displaces the position by ~0.6 km (~20 arcsec). goeph computes the surface position at the observation time directly, without this light-time iteration.
 
-- Grows to several arcseconds at the edges of the date range (1850, 2149)
-- Cascades through the precession/nutation/Earth-rotation chain, affecting geodetic transforms, altaz, and apparent positions
-- Produces km-level position errors proportional to target distance (a 3 arcsec error at Saturn's distance of ~1.4 billion km is ~20,000 km)
+**GMST formula (~0.3 arcsec at T=1):** goeph uses the IAU 1982 Meeus GMST formula; Skyfield uses the IERS 2000 ERA-based formula. These differ by up to ~0.3 arcsec per century from J2000.
 
-This is a deliberate tradeoff: 30 terms keeps the nutation table small and computation fast, at the cost of ~1 arcsecond precision. Implementing full 687-term nutation (Tier 3 in the roadmap) would reduce most tolerances by 3 orders of magnitude.
+**Equation of equinoxes complementary terms (~0.003 arcsec):** Skyfield includes additional complementary terms in the equation of equinoxes that goeph omits. This is negligible.
+
+## Nutation mode
+
+Golden tests that compare nutation-dependent computations (geodetic→ecliptic, altaz) use `coord.NutationFull` mode to match Skyfield's full IAU 2000A model. The tolerances listed above reflect this mode. With the default `NutationStandard` (30 terms), results are ~0.001 arcsec less precise — negligible compared to the dominant error sources listed above.
 
 ## Golden file format
 

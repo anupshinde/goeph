@@ -58,7 +58,7 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - No star catalog loading
 - No Kepler orbit propagation (asteroids/comets)
 - No SPK Type 13/21 support
-- Nutation uses top 30 IAU 2000A terms (not all 687) — sufficient for sub-arcsecond work, not micro-arcsecond
+- GMST uses IAU 1982 formula (Skyfield uses IERS 2000 ERA-based) — introduces ~0.3 arcsec/century drift
 
 Contributions for any of these are welcome — see "Project status & support" below.
 
@@ -104,7 +104,7 @@ func main() {
 }
 ```
 
-See [`examples/`](examples/) for 19 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+See [`examples/`](examples/) for 20 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
@@ -135,6 +135,29 @@ An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also do
 | `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point, TEME→ICRF conversion |
 | `star` | `goeph/star` | Fixed star coordinates (Galactic Center) |
 | `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
+
+---
+
+## Nutation precision
+
+The `coord` package supports two nutation precision modes via `SetNutationPrecision`:
+
+| Mode | Terms | Precision | Speed | Use case |
+|------|-------|-----------|-------|----------|
+| `NutationStandard` (default) | 30 luni-solar | ~1 arcsec | ~150 ns/call | Batch processing, general astronomy |
+| `NutationFull` | 678 luni-solar + 687 planetary | ~0.001 arcsec | ~10.5 μs/call | High-precision single-point, Skyfield parity |
+
+```go
+// For high-precision mode (matches Skyfield's default):
+coord.SetNutationPrecision(coord.NutationFull)
+
+// To restore fast mode:
+coord.SetNutationPrecision(coord.NutationStandard)
+```
+
+**When to use which:** In both modes, the dominant error sources are light-time correction (~20 arcsec) and GMST formula difference (~0.3 arcsec/century), which dwarf the nutation precision difference. Use `NutationFull` only when you need sub-arcsecond nutation accuracy or exact Skyfield parity. For batch workloads (millions of rows), `NutationStandard` is ~70x faster with negligible accuracy loss.
+
+Call `SetNutationPrecision` once at program startup. It is not safe for concurrent use with different precision needs.
 
 ---
 
@@ -173,13 +196,13 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 |------------|-------------------|-------|
 | SPK positions (ICRF) | < 0.01 km | Mercury worst case ~0.002 km (with TDB-TT correction) |
 | Velocity | < 0.01 km/day | Chebyshev derivative ~0.0002 km/day (with TDB-TT correction) |
-| Apparent positions | < 50 km abs, < 1.5e-5 relative | 30-term nutation (~3 arcsec angular, scales with distance) |
-| Altitude | < 0.011° | 30-term nutation propagates into Earth rotation |
-| Azimuth | < 0.057° (for \|alt\|<80°) | Near-zenith singularity amplifies to 0.78° at alt=89° |
+| Apparent positions | < 50 km abs, < 1.5e-5 relative | Light-time in Skyfield's observe() (~20 arcsec, scales with distance) |
+| Altitude | < 0.005° | GMST formula difference |
+| Azimuth | < 0.02° | GMST formula + minor geometry effects |
 | UTC→TT | < 1e-9 days | Same leap second table |
 | TT→UT1 | < 1e-6 days (~65 ms) | Cubic spline vs Skyfield's spline (different source knots) |
 | GMST | < 1e-3° | goeph uses IAU 1982 (Meeus); Skyfield uses IERS 2000 ERA-based |
-| Geodetic→ecliptic | < 0.035° | 30-term nutation gap grows with distance from J2000 |
+| Geodetic→ecliptic | < 0.025° | Light-time in Skyfield's observe() for surface locations |
 | ERA | < 1e-8° | Exact same IAU 2000 formula |
 | TDB-TT | < 1e-9 s | Same Fairhead & Bretagnon terms |
 | Separation angle | < 1e-8° | Same position vectors, same formula |
@@ -190,7 +213,7 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 
 See [`testdata/README.md`](testdata/README.md) for the full tolerance breakdown with error sources.
 
-The nutation gap (30 vs 687 IAU 2000A terms) is the main deviation from Skyfield. It produces ~1 arcsecond error near J2000, growing to several arcseconds at the extremes of the 300-year test range. This affects apparent positions, altaz, and geodetic transforms. For sub-arcsecond work near the present, this is fine; for micro-arcsecond precision or dates far from J2000, the full model would need to be ported.
+The remaining deviations from Skyfield are primarily due to: (1) light-time correction applied by Skyfield's `observe()` for surface locations (~20 arcsec), and (2) GMST formula differences (IAU 1982 vs IERS 2000 ERA-based, ~0.3 arcsec/century).
 
 In addition to golden tests, the [`validation/`](validation/) directory contains Go and Python data generators that produce identical CSV outputs over a 200-year range, with a comparison script to verify column-by-column accuracy. See:
 
@@ -202,7 +225,7 @@ In addition to golden tests, the [`validation/`](validation/) directory contains
 ## Known limitations
 
 1. **SPK Type 2 and 3 only** — rejects other segment types. All JPL DE-series files use Type 2. Some asteroid/comet BSP files use Type 3. Types 13, 21 are not supported.
-2. **30-term nutation** — sub-arcsecond, not micro-arcsecond. This is the dominant error source for coordinate transforms.
+2. **GMST uses IAU 1982 formula** — differs from Skyfield's IERS 2000 ERA-based GMST by ~0.3 arcsec/century.
 3. **No event searching** — no sunrise/sunset, moon phases, conjunctions, or generic event finding.
 4. **No star catalogs** — only a single hardcoded Galactic Center direction.
 5. **Leap second table frozen at 2017** — new leap seconds require a code update.

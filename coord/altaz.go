@@ -20,13 +20,20 @@ import "math"
 func Altaz(posICRF [3]float64, latDeg, lonDeg, jdUT1 float64) (altDeg, azDeg, distKm float64) {
 	T := (jdUT1 - j2000JD) / 36525.0
 
-	// Step 1: Precession — J2000/ICRF → mean equator of date.
+	// Step 0: Frame bias — ICRS → J2000 dynamical (IERS Conventions 2003).
+	B := &ICRSToJ2000Matrix
+	var posJ2000 [3]float64
+	for i := 0; i < 3; i++ {
+		posJ2000[i] = B[i][0]*posICRF[0] + B[i][1]*posICRF[1] + B[i][2]*posICRF[2]
+	}
+
+	// Step 1: Precession — J2000 → mean equator of date.
 	// precessionMatrixInverse returns P^T (date→J2000). We need P (J2000→date),
 	// so we apply the transpose: (P·v)[i] = Σ_j P^T[j][i] · v[j].
 	PT := precessionMatrixInverse(T)
 	var pos [3]float64
 	for i := 0; i < 3; i++ {
-		pos[i] = PT[0][i]*posICRF[0] + PT[1][i]*posICRF[1] + PT[2][i]*posICRF[2]
+		pos[i] = PT[0][i]*posJ2000[0] + PT[1][i]*posJ2000[1] + PT[2][i]*posJ2000[2]
 	}
 
 	// Step 2: Nutation — mean equator → true equator of date.
@@ -87,11 +94,18 @@ func Altaz(posICRF [3]float64, latDeg, lonDeg, jdUT1 float64) (altDeg, azDeg, di
 func HourAngleDec(posICRF [3]float64, lonDeg, jdUT1 float64) (haDeg, decDeg float64) {
 	T := (jdUT1 - j2000JD) / 36525.0
 
+	// Frame bias: ICRS → J2000 dynamical
+	B := &ICRSToJ2000Matrix
+	var posJ2000 [3]float64
+	for i := 0; i < 3; i++ {
+		posJ2000[i] = B[i][0]*posICRF[0] + B[i][1]*posICRF[1] + B[i][2]*posICRF[2]
+	}
+
 	// Precession: J2000 → mean equator of date
 	PT := precessionMatrixInverse(T)
 	var pos [3]float64
 	for i := 0; i < 3; i++ {
-		pos[i] = PT[0][i]*posICRF[0] + PT[1][i]*posICRF[1] + PT[2][i]*posICRF[2]
+		pos[i] = PT[0][i]*posJ2000[0] + PT[1][i]*posJ2000[1] + PT[2][i]*posJ2000[2]
 	}
 
 	// Nutation: mean → true equator of date

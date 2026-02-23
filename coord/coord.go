@@ -30,49 +30,8 @@ type Location struct {
 	Lon  float64 // degrees, positive east
 }
 
-// nutationTerm holds one row of the IAU 2000A luni-solar nutation series.
-// Units for s, sdot, cp, c, cdot, sp: 0.1 microarcseconds (0.1 uas).
-type nutationTerm struct {
-	nl, nlp, nf, nd, nom int     // integer multipliers for l, l', F, D, Ω
-	s, sdot, cp          float64 // dpsi: (s + sdot*T)*sin(arg) + cp*cos(arg)
-	c, cdot, sp          float64 // deps: (c + cdot*T)*cos(arg) + sp*sin(arg)
-}
-
-// Top 30 IAU 2000A luni-solar nutation terms by |s| amplitude.
-// Source: Skyfield nutation.npz / IERS Conventions 2003 Table 5.3a.
-var nutationTerms = []nutationTerm{
-	// nl nlp  nf  nd nom          s       sdot        cp             c      cdot        sp
-	{0, 0, 0, 0, 1, -172064161, -174666, 33386, 92052331, 9086, 15377},
-	{0, 0, 2, -2, 2, -13170906, -1675, -13696, 5730336, -3015, -4587},
-	{0, 0, 2, 0, 2, -2276413, -234, 2796, 978459, -485, 1374},
-	{0, 0, 0, 0, 2, 2074554, 207, -698, -897492, 470, -291},
-	{0, 1, 0, 0, 0, 1475877, -3633, 11817, 73871, -184, -1924},
-	{1, 0, 0, 0, 0, 711159, 73, -872, -6750, 0, 358},
-	{0, 1, 2, -2, 2, -516821, 1226, -524, 224386, -677, -174},
-	{0, 0, 2, 0, 1, -387298, -367, 380, 200728, 18, 318},
-	{1, 0, 2, 0, 2, -301461, -36, 816, 129025, -63, 367},
-	{0, -1, 2, -2, 2, 215829, -494, 111, -95929, 299, 132},
-	{-1, 0, 0, 2, 0, 156994, 10, -168, -1235, 0, 82},
-	{0, 0, 2, -2, 1, 128227, 137, 181, -68982, -9, 39},
-	{-1, 0, 2, 0, 2, 123457, 11, 19, -53311, 32, -4},
-	{0, 0, 0, 2, 0, 63384, 11, -150, -1220, 0, 29},
-	{1, 0, 0, 0, 1, 63110, 63, 27, -33228, 0, -9},
-	{-1, 0, 2, 2, 2, -59641, -11, 149, 25543, -11, 66},
-	{-1, 0, 0, 0, 1, -57976, -63, -189, 31429, 0, -75},
-	{1, 0, 2, 0, 1, -51613, -42, 129, 26366, 0, 78},
-	{-2, 0, 0, 2, 0, -47722, 0, -18, 477, 0, -25},
-	{-2, 0, 2, 0, 1, 45893, 50, 31, -24236, -10, 20},
-	{0, 0, 2, 2, 2, -38571, -1, 158, 16452, -11, 68},
-	{0, -2, 2, -2, 2, 32481, 0, 0, -13870, 0, 0},
-	{2, 0, 2, 0, 2, -31046, -1, 131, 13238, -11, 59},
-	{2, 0, 0, 0, 0, 29243, 0, -74, -609, 0, 13},
-	{1, 0, 2, -2, 2, 28593, 0, -1, -12338, 10, -3},
-	{0, 0, 2, 0, 0, 25887, 0, -66, -550, 0, 11},
-	{0, 0, -2, 2, 0, 21783, 0, 13, -167, 0, 13},
-	{-1, 0, 2, 0, 1, 20441, 21, 10, -10758, 0, -3},
-	{0, 2, 0, 0, 0, 16707, -85, -10, 168, -1, 10},
-	{0, 2, 2, -2, 2, -15794, 72, -16, 6850, -42, -5},
-}
+// Full IAU 2000A nutation coefficient tables (678 luni-solar + 687 planetary terms)
+// are in nutation_data.go, generated from Skyfield's nutation.npz.
 
 // ICRFToEcliptic converts an ICRF Cartesian vector to ecliptic latitude and
 // longitude (degrees). Uses the J2000 mean ecliptic (matching Skyfield's
@@ -148,11 +107,65 @@ func meanObliquity(T float64) float64 {
 	return (84381.448 + T*(-46.8150+T*(-0.00059+T*0.001813))) * arcsec2rad
 }
 
-// nutationAngles computes nutation in longitude (dpsi) and obliquity (deps)
-// using the top 30 terms of the IAU 2000A luni-solar series.
+// nutationAngles computes nutation in longitude (dpsi) and obliquity (deps).
 // T is Julian centuries from J2000 TDB.
 // Returns dpsi and deps in radians.
+// Dispatches to nutationAnglesStandard (30 terms) or nutationAnglesFull (1365 terms)
+// based on the package-level NutationPrecision setting.
 func nutationAngles(T float64) (dpsiRad, depsRad float64) {
+	if nutationPrecision == NutationFull {
+		return nutationAnglesFull(T)
+	}
+	return nutationAnglesStandard(T)
+}
+
+// nutationTerm holds one row of the IAU 2000A luni-solar nutation series.
+// Units for s, sdot, cp, c, cdot, sp: 0.1 microarcseconds (0.1 uas).
+type nutationTerm struct {
+	nl, nlp, nf, nd, nom int     // integer multipliers for l, l', F, D, Ω
+	s, sdot, cp          float64 // dpsi: (s + sdot*T)*sin(arg) + cp*cos(arg)
+	c, cdot, sp          float64 // deps: (c + cdot*T)*cos(arg) + sp*sin(arg)
+}
+
+// Top 30 IAU 2000A luni-solar nutation terms by |s| amplitude.
+// Source: Skyfield nutation.npz / IERS Conventions 2003 Table 5.3a.
+var nutationTerms = []nutationTerm{
+	// nl nlp  nf  nd nom          s       sdot        cp             c      cdot        sp
+	{0, 0, 0, 0, 1, -172064161, -174666, 33386, 92052331, 9086, 15377},
+	{0, 0, 2, -2, 2, -13170906, -1675, -13696, 5730336, -3015, -4587},
+	{0, 0, 2, 0, 2, -2276413, -234, 2796, 978459, -485, 1374},
+	{0, 0, 0, 0, 2, 2074554, 207, -698, -897492, 470, -291},
+	{0, 1, 0, 0, 0, 1475877, -3633, 11817, 73871, -184, -1924},
+	{1, 0, 0, 0, 0, 711159, 73, -872, -6750, 0, 358},
+	{0, 1, 2, -2, 2, -516821, 1226, -524, 224386, -677, -174},
+	{0, 0, 2, 0, 1, -387298, -367, 380, 200728, 18, 318},
+	{1, 0, 2, 0, 2, -301461, -36, 816, 129025, -63, 367},
+	{0, -1, 2, -2, 2, 215829, -494, 111, -95929, 299, 132},
+	{-1, 0, 0, 2, 0, 156994, 10, -168, -1235, 0, 82},
+	{0, 0, 2, -2, 1, 128227, 137, 181, -68982, -9, 39},
+	{-1, 0, 2, 0, 2, 123457, 11, 19, -53311, 32, -4},
+	{0, 0, 0, 2, 0, 63384, 11, -150, -1220, 0, 29},
+	{1, 0, 0, 0, 1, 63110, 63, 27, -33228, 0, -9},
+	{-1, 0, 2, 2, 2, -59641, -11, 149, 25543, -11, 66},
+	{-1, 0, 0, 0, 1, -57976, -63, -189, 31429, 0, -75},
+	{1, 0, 2, 0, 1, -51613, -42, 129, 26366, 0, 78},
+	{-2, 0, 0, 2, 0, -47722, 0, -18, 477, 0, -25},
+	{-2, 0, 2, 0, 1, 45893, 50, 31, -24236, -10, 20},
+	{0, 0, 2, 2, 2, -38571, -1, 158, 16452, -11, 68},
+	{0, -2, 2, -2, 2, 32481, 0, 0, -13870, 0, 0},
+	{2, 0, 2, 0, 2, -31046, -1, 131, 13238, -11, 59},
+	{2, 0, 0, 0, 0, 29243, 0, -74, -609, 0, 13},
+	{1, 0, 2, -2, 2, 28593, 0, -1, -12338, 10, -3},
+	{0, 0, 2, 0, 0, 25887, 0, -66, -550, 0, 11},
+	{0, 0, -2, 2, 0, 21783, 0, 13, -167, 0, 13},
+	{-1, 0, 2, 0, 1, 20441, 21, 10, -10758, 0, -3},
+	{0, 2, 0, 0, 0, 16707, -85, -10, 168, -1, 10},
+	{0, 2, 2, -2, 2, -15794, 72, -16, 6850, -42, -5},
+}
+
+// nutationAnglesStandard computes nutation using the 30 largest luni-solar terms.
+// ~1 arcsec precision, ~45x faster than the full series.
+func nutationAnglesStandard(T float64) (dpsiRad, depsRad float64) {
 	l, lp, F, D, om := fundamentalArgs(T)
 
 	var dpsi, deps float64
@@ -173,6 +186,59 @@ func nutationAngles(T float64) (dpsiRad, depsRad float64) {
 	return
 }
 
+// nutationAnglesFull computes nutation using the full IAU 2000A series:
+// 678 luni-solar + 687 planetary terms. ~0.001 arcsec precision.
+func nutationAnglesFull(T float64) (dpsiRad, depsRad float64) {
+	l, lp, F, D, om := fundamentalArgs(T)
+	fa := [5]float64{l, lp, F, D, om}
+
+	// --- Luni-solar nutation (678 terms) ---
+	var dpsi, deps float64
+	for i := 0; i < 678; i++ {
+		n := &luniSolarNals[i]
+		arg := float64(n[0])*fa[0] + float64(n[1])*fa[1] + float64(n[2])*fa[2] +
+			float64(n[3])*fa[3] + float64(n[4])*fa[4]
+		sinArg, cosArg := math.Sincos(arg)
+		lc := &luniSolarLonCoeffs[i]
+		dpsi += (lc[0] + lc[1]*T)*sinArg + lc[2]*cosArg
+		oc := &luniSolarOblCoeffs[i]
+		deps += (oc[0] + oc[1]*T)*cosArg + oc[2]*sinArg
+	}
+
+	// --- Planetary nutation (687 terms) ---
+	// Planetary fundamental arguments (mean longitudes, radians)
+	pa := [14]float64{
+		fa[0], fa[1], fa[2], fa[3], fa[4], // Delaunay args
+		4.402608842 + 2608.7903141574*T,    // Mercury
+		3.176146697 + 1021.3285546211*T,    // Venus
+		1.753470314 + 628.3075849991*T,     // Earth
+		6.203480913 + 334.0612426700*T,     // Mars
+		0.599546497 + 52.9690962641*T,      // Jupiter
+		0.874016757 + 21.3299104960*T,      // Saturn
+		5.481293872 + 7.4781598567*T,       // Uranus
+		5.311886287 + 3.8133035638*T,       // Neptune
+		(0.024381750 + 0.00000538691*T) * T, // general precession
+	}
+
+	for i := 0; i < 687; i++ {
+		n := &planetaryNapl[i]
+		var arg float64
+		for j := 0; j < 14; j++ {
+			arg += float64(n[j]) * pa[j]
+		}
+		sinArg, cosArg := math.Sincos(arg)
+		lc := &planetaryLonCoeffs[i]
+		dpsi += lc[0]*sinArg + lc[1]*cosArg
+		oc := &planetaryOblCoeffs[i]
+		deps += oc[0]*sinArg + oc[1]*cosArg
+	}
+
+	// Convert from 0.1 microarcseconds to radians
+	dpsiRad = dpsi * tenthUas2Rad
+	depsRad = deps * tenthUas2Rad
+	return
+}
+
 // nutationMatrixTranspose returns N^T, the transpose of the nutation matrix.
 // N = R1(-trueOb) * R3(dpsi) * R1(meanOb) transforms mean equinox → true equinox.
 // N^T transforms true equinox → mean equinox.
@@ -183,16 +249,16 @@ func nutationMatrixTranspose(dpsiRad, depsRad, epsMRad float64) [3][3]float64 {
 	sinEpsM, cosEpsM := math.Sincos(epsMRad)
 	sinEpsT, cosEpsT := math.Sincos(epsTRad)
 
-	// N matrix (mean → true) using IAU R3 convention (R3(α) has +sinα at [0][1]):
-	//   N[0] = { cosDpsi, sinDpsi*cosEpsM, sinDpsi*sinEpsM }
-	//   N[1] = { -sinDpsi*cosEpsT, cosDpsi*cosEpsM*cosEpsT + sinEpsM*sinEpsT, cosDpsi*sinEpsM*cosEpsT - cosEpsM*sinEpsT }
-	//   N[2] = { -sinDpsi*sinEpsT, cosDpsi*cosEpsM*sinEpsT - sinEpsM*cosEpsT, cosDpsi*sinEpsM*sinEpsT + cosEpsM*cosEpsT }
+	// N matrix (mean → true) using standard R3 convention (R3(α) has -sinα at [0][1]):
+	//   N[0] = { cosDpsi, -sinDpsi*cosEpsM, -sinDpsi*sinEpsM }
+	//   N[1] = { sinDpsi*cosEpsT, cosDpsi*cosEpsM*cosEpsT + sinEpsM*sinEpsT, cosDpsi*sinEpsM*cosEpsT - cosEpsM*sinEpsT }
+	//   N[2] = { sinDpsi*sinEpsT, cosDpsi*cosEpsM*sinEpsT - sinEpsM*cosEpsT, cosDpsi*sinEpsM*sinEpsT + cosEpsM*cosEpsT }
 	//
 	// Return N^T (transpose):
 	return [3][3]float64{
-		{cosDpsi, -sinDpsi * cosEpsT, -sinDpsi * sinEpsT},
-		{sinDpsi * cosEpsM, cosDpsi*cosEpsM*cosEpsT + sinEpsM*sinEpsT, cosDpsi*cosEpsM*sinEpsT - sinEpsM*cosEpsT},
-		{sinDpsi * sinEpsM, cosDpsi*sinEpsM*cosEpsT - cosEpsM*sinEpsT, cosDpsi*sinEpsM*sinEpsT + cosEpsM*cosEpsT},
+		{cosDpsi, sinDpsi * cosEpsT, sinDpsi * sinEpsT},
+		{-sinDpsi * cosEpsM, cosDpsi*cosEpsM*cosEpsT + sinEpsM*sinEpsT, cosDpsi*cosEpsM*sinEpsT - sinEpsM*cosEpsT},
+		{-sinDpsi * sinEpsM, cosDpsi*sinEpsM*cosEpsT - cosEpsM*sinEpsT, cosDpsi*sinEpsM*sinEpsT + cosEpsM*cosEpsT},
 	}
 }
 
@@ -285,12 +351,18 @@ func TEMEToICRF(posKmTEME [3]float64, jdUT1 float64) [3]float64 {
 	yMean := NT[1][0]*xTrue + NT[1][1]*yTrue + NT[1][2]*zTrue
 	zMean := NT[2][0]*xTrue + NT[2][1]*yTrue + NT[2][2]*zTrue
 
-	// Step 4: Apply P^T (mean equinox of date → J2000/ICRF)
+	// Step 4: Apply P^T (mean equinox of date → J2000)
 	PT := precessionMatrixInverse(T)
+	xJ2000 := PT[0][0]*xMean + PT[0][1]*yMean + PT[0][2]*zMean
+	yJ2000 := PT[1][0]*xMean + PT[1][1]*yMean + PT[1][2]*zMean
+	zJ2000 := PT[2][0]*xMean + PT[2][1]*yMean + PT[2][2]*zMean
+
+	// Step 5: Apply B^T (frame bias inverse: J2000 → ICRS)
+	B := &ICRSToJ2000Matrix
 	return [3]float64{
-		PT[0][0]*xMean + PT[0][1]*yMean + PT[0][2]*zMean,
-		PT[1][0]*xMean + PT[1][1]*yMean + PT[1][2]*zMean,
-		PT[2][0]*xMean + PT[2][1]*yMean + PT[2][2]*zMean,
+		B[0][0]*xJ2000 + B[1][0]*yJ2000 + B[2][0]*zJ2000,
+		B[0][1]*xJ2000 + B[1][1]*yJ2000 + B[2][1]*zJ2000,
+		B[0][2]*xJ2000 + B[1][2]*yJ2000 + B[2][2]*zJ2000,
 	}
 }
 
@@ -336,13 +408,19 @@ func GeodeticToICRF(latDeg, lonDeg, jdUT1 float64) (x, y, z float64) {
 	yMean := NT[1][0]*xTrue + NT[1][1]*yTrue + NT[1][2]*zTrue
 	zMean := NT[2][0]*xTrue + NT[2][1]*yTrue + NT[2][2]*zTrue
 
-	// Step 6: Apply P^T to go from mean equinox of date → J2000/ICRF
+	// Step 6: Apply P^T to go from mean equinox of date → J2000
 	P := precessionMatrixInverse(T)
-	xICRF := P[0][0]*xMean + P[0][1]*yMean + P[0][2]*zMean
-	yICRF := P[1][0]*xMean + P[1][1]*yMean + P[1][2]*zMean
-	zICRF := P[2][0]*xMean + P[2][1]*yMean + P[2][2]*zMean
+	xJ2000 := P[0][0]*xMean + P[0][1]*yMean + P[0][2]*zMean
+	yJ2000 := P[1][0]*xMean + P[1][1]*yMean + P[1][2]*zMean
+	zJ2000 := P[2][0]*xMean + P[2][1]*yMean + P[2][2]*zMean
 
-	// Step 7: Normalize to unit vector
+	// Step 7: Apply B^T (frame bias inverse) to go from J2000 → ICRS
+	B := &ICRSToJ2000Matrix
+	xICRF := B[0][0]*xJ2000 + B[1][0]*yJ2000 + B[2][0]*zJ2000
+	yICRF := B[0][1]*xJ2000 + B[1][1]*yJ2000 + B[2][1]*zJ2000
+	zICRF := B[0][2]*xJ2000 + B[1][2]*yJ2000 + B[2][2]*zJ2000
+
+	// Step 8: Normalize to unit vector
 	r := math.Sqrt(xICRF*xICRF + yICRF*yICRF + zICRF*zICRF)
 	return xICRF / r, yICRF / r, zICRF / r
 }
