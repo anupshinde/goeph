@@ -5,12 +5,6 @@
 
 A fast Go library for computing planetary positions from JPL ephemeris files.
 
-**This project was coded by [Claude Opus 4.6](https://claude.ai) (Anthropic's AI model), directed by a human and verified with tests compared to [Skyfield](https://github.com/skyfielders/python-skyfield) (Python) output.** The initial implementation, benchmarking, and validation were completed in a single day. Exact output values do not match Skyfield — there are deviations — but the error margins are documented and acceptable for the author's use case. 
-
-**NOTE:** The code itself is not reviewed manually — the outputs were measured for correctness over very long periods. The golden test harness ensures correctness is measurable, not assumed.
-
-> This README is also maintained by AI (Claude).
-
 ---
 
 ## Origin & attribution
@@ -30,6 +24,8 @@ If you need authoritative astronomy or Skyfield's full feature set, use [Skyfiel
 I needed fast planetary position computation in Go for a research project. Skyfield is great but Python was too slow for my batch workloads. I couldn't find a Go library that did what I needed, so I had Claude build one inspired by Skyfield's approach. It's ~14x faster than the Python equivalent for the same computations.
 
 I'm publishing this because someone else is probably looking for the same thing I was.
+
+This project was [coded by AI](#ai-disclosure) and validated against Skyfield using [golden tests](#validation-against-skyfield) and [end-to-end CSV comparison](validation/).
 
 ---
 
@@ -210,13 +206,17 @@ If you build something better — more complete, faster, more accurate — I'm h
 
 ## AI disclosure
 
-This project was **coded by Claude Opus 4.6** (Anthropic), with human direction, review, and verification. Specifically:
+This project was **coded by [Claude Opus 4.6](https://claude.ai)** (Anthropic), directed by a human and verified with tests compared to [Skyfield](https://github.com/skyfielders/python-skyfield) (Python) output. The initial implementation was completed rapidly with AI — in a single day — which is why the golden test harness and end-to-end validation are critical.
 
 - The Go implementation of Skyfield-inspired algorithms was done by Claude
 - Benchmarking and output comparison against Skyfield was done collaboratively
 - The golden test strategy ensures correctness is verifiable regardless of how the code was written
 
+Most of the code itself is not reviewed manually, unless when it was absolutely needed — the outputs were measured for correctness over very long periods. The golden test harness ensures correctness is measurable, not assumed.
+
 The code is the code. The tests are the tests. Judge it by its outputs.
+
+> This README is also maintained by AI.
 
 ---
 
