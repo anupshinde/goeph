@@ -489,8 +489,44 @@ func LeapSecondOffset(jdUTC float64) float64 {
 	return leapSecondTable[lo][1]
 }
 
+// deltaTSpline holds the precomputed second derivatives for the cubic spline.
+// Computed once at package init time via natural cubic spline on the uniform
+// (h=1 year) delta-T table. This replaces linear interpolation and matches
+// Skyfield's spline-based delta-T evaluation.
+var deltaTSpline [401]float64
+
+func init() {
+	// Natural cubic spline with uniform spacing h=1.
+	// Tridiagonal system: M_{i-1} + 4*M_i + M_{i+1} = 6*(y_{i+1} - 2*y_i + y_{i-1})
+	// Natural boundary: M_0 = 0, M_n = 0.
+	// Solve with Thomas algorithm (forward sweep + back substitution).
+	n := len(deltaTTable)
+
+	// Right-hand side: d_i = 6*(y_{i+1} - 2*y_i + y_{i-1}) for i=1..n-2
+	d := make([]float64, n)
+	for i := 1; i < n-1; i++ {
+		d[i] = 6.0 * (deltaTTable[i+1][1] - 2.0*deltaTTable[i][1] + deltaTTable[i-1][1])
+	}
+
+	// Forward sweep: eliminate sub-diagonal (coefficient is 1, diagonal is 4)
+	// After elimination: diag[i] = 4 - 1/diag[i-1], d[i] -= d[i-1]/diag[i-1]
+	diag := make([]float64, n)
+	diag[1] = 4.0
+	for i := 2; i < n-1; i++ {
+		diag[i] = 4.0 - 1.0/diag[i-1]
+		d[i] -= d[i-1] / diag[i-1]
+	}
+
+	// Back substitution
+	deltaTSpline[0] = 0
+	deltaTSpline[n-1] = 0
+	for i := n - 2; i >= 1; i-- {
+		deltaTSpline[i] = (d[i] - deltaTSpline[i+1]) / diag[i]
+	}
+}
+
 // DeltaT returns ΔT = TT-UT1 in seconds for a given year (fractional).
-// Uses linear interpolation on the ΔT table.
+// Uses cubic spline interpolation on the ΔT table.
 // Beyond the table range, uses the last/first known value (flat extrapolation).
 func DeltaT(year float64) float64 {
 	n := len(deltaTTable)
@@ -509,12 +545,17 @@ func DeltaT(year float64) float64 {
 		idx = n - 2
 	}
 
-	y0 := deltaTTable[idx][0]
-	dt0 := deltaTTable[idx][1]
-	dt1 := deltaTTable[idx+1][1]
+	frac := year - deltaTTable[idx][0] // 0 ≤ frac ≤ 1
+	y0 := deltaTTable[idx][1]
+	y1 := deltaTTable[idx+1][1]
+	m0 := deltaTSpline[idx]
+	m1 := deltaTSpline[idx+1]
 
-	frac := (year - y0)
-	return dt0 + frac*(dt1-dt0)
+	// Cubic spline evaluation with h=1:
+	// S(x) = m0*(1-t)^3/6 + m1*t^3/6 + (y0 - m0/6)*(1-t) + (y1 - m1/6)*t
+	t := frac
+	omt := 1.0 - t
+	return m0*omt*omt*omt/6.0 + m1*t*t*t/6.0 + (y0-m0/6.0)*omt + (y1-m1/6.0)*t
 }
 
 // TimeToJDUTC converts a UTC time.Time to a UTC Julian Date.

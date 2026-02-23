@@ -252,6 +252,48 @@ func precessionMatrixInverse(T float64) [3][3]float64 {
 	}
 }
 
+// TEMEToICRF converts a TEME (True Equator, Mean Equinox) position vector
+// from SGP4 propagation to ICRF/GCRS coordinates.
+//
+// posKmTEME is the satellite position in km from SGP4 (TEME frame).
+// jdUT1 is the UT1 Julian date (used for Earth rotation via nutation/precession).
+//
+// The TEME frame is the output frame of SGP4. It uses the true equator of
+// date but a "mean" equinox that differs from the classical mean equinox
+// by the equation of the equinoxes. The conversion chain is:
+//
+//	TEME → true equator of date (via equation of equinoxes rotation)
+//	     → mean equator of date (via nutation inverse)
+//	     → ICRF/J2000 (via precession inverse)
+func TEMEToICRF(posKmTEME [3]float64, jdUT1 float64) [3]float64 {
+	T := (jdUT1 - j2000JD) / 36525.0
+
+	// Step 1: Compute equation of equinoxes = dpsi * cos(meanObliquity)
+	dpsiRad, depsRad := nutationAngles(T)
+	epsM := meanObliquity(T)
+	eqEqRad := dpsiRad * math.Cos(epsM)
+
+	// Step 2: Rotate TEME by Rz(eq_eq) → true equator/equinox of date
+	sinE, cosE := math.Sincos(eqEqRad)
+	xTrue := cosE*posKmTEME[0] - sinE*posKmTEME[1]
+	yTrue := sinE*posKmTEME[0] + cosE*posKmTEME[1]
+	zTrue := posKmTEME[2]
+
+	// Step 3: Apply N^T (true equinox → mean equinox of date)
+	NT := nutationMatrixTranspose(dpsiRad, depsRad, epsM)
+	xMean := NT[0][0]*xTrue + NT[0][1]*yTrue + NT[0][2]*zTrue
+	yMean := NT[1][0]*xTrue + NT[1][1]*yTrue + NT[1][2]*zTrue
+	zMean := NT[2][0]*xTrue + NT[2][1]*yTrue + NT[2][2]*zTrue
+
+	// Step 4: Apply P^T (mean equinox of date → J2000/ICRF)
+	PT := precessionMatrixInverse(T)
+	return [3]float64{
+		PT[0][0]*xMean + PT[0][1]*yMean + PT[0][2]*zMean,
+		PT[1][0]*xMean + PT[1][1]*yMean + PT[1][2]*zMean,
+		PT[2][0]*xMean + PT[2][1]*yMean + PT[2][2]*zMean,
+	}
+}
+
 // GeodeticToICRF converts geodetic coordinates (lat/lon in degrees) to an ICRF
 // direction vector at the given UT1 Julian date.
 // Uses the full transformation: ICRF = P^T * N^T * Rz(GAST) * ITRF

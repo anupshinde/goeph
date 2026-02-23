@@ -422,8 +422,314 @@ func TestGeodeticToEcliptic_Golden(t *testing.T) {
 		len(golden.Tests), failures, maxLatErr, maxLonErr)
 }
 
+func TestAltaz_Zenith(t *testing.T) {
+	// A point directly at the zenith should have altitude ~90°.
+	// GeodeticToICRF gives the ICRF direction of a ground point.
+	// Altaz of that direction from the same location should be nearly overhead.
+	lat, lon := 40.0, -74.0
+	jd := j2000JD
+
+	x, y, z := GeodeticToICRF(lat, lon, jd)
+	// Scale to some distance (doesn't matter for direction)
+	pos := [3]float64{x * 1e6, y * 1e6, z * 1e6}
+
+	alt, az, dist := Altaz(pos, lat, lon, jd)
+	_ = az
+	if math.Abs(alt-90.0) > 1.0 {
+		t.Errorf("zenith altitude = %.4f°, want ~90°", alt)
+	}
+	if math.Abs(dist-1e6) > 1.0 {
+		t.Errorf("distance = %.4f, want 1e6", dist)
+	}
+}
+
+func TestAltaz_Horizon(t *testing.T) {
+	// A point 90° away (in the equatorial plane) should be near the horizon.
+	lat, lon := 0.0, 0.0
+	jd := j2000JD
+
+	// ICRF direction of (lat=0, lon=90) is roughly 90° away in longitude
+	x2, y2, z2 := GeodeticToICRF(0.0, 90.0, jd)
+	pos := [3]float64{x2 * 1e6, y2 * 1e6, z2 * 1e6}
+
+	alt, _, _ := Altaz(pos, lat, lon, jd)
+	// Should be within a few degrees of the horizon (not exact due to precession/nutation)
+	if math.Abs(alt) > 10.0 {
+		t.Errorf("horizon point altitude = %.4f°, want near 0°", alt)
+	}
+}
+
+func TestAltaz_AzimuthRange(t *testing.T) {
+	// Azimuth should always be in [0, 360)
+	jd := 2451545.0 + 365.25*10.0
+	for _, lat := range []float64{-45, 0, 45, 90} {
+		for _, lon := range []float64{-180, -90, 0, 90, 180} {
+			pos := [3]float64{1e8, 2e8, 3e8}
+			alt, az, _ := Altaz(pos, lat, lon, jd)
+			_ = alt
+			if az < 0 || az >= 360 {
+				t.Errorf("lat=%.0f lon=%.0f: az=%.4f outside [0,360)", lat, lon, az)
+			}
+		}
+	}
+}
+
+func TestHourAngleDec_OnMeridian(t *testing.T) {
+	// An object on the local meridian should have HA near 0° (or 360°).
+	// At J2000, the vernal equinox is on the meridian at GAST=0 for lon=0.
+	// Use an object at RA=GAST, Dec=0.
+	jd := j2000JD
+	gast := GAST(jd)
+
+	// Object at RA = GAST (true equinox of date)
+	raDeg := gast
+	raHours := raDeg / 15.0
+	x, y, z := RADecToICRF(raHours, 0)
+
+	// This is approximate since RADecToICRF gives J2000 RA/Dec, not true equinox.
+	// The precession/nutation difference at J2000 is very small.
+	pos := [3]float64{x, y, z}
+	ha, dec := HourAngleDec(pos, 0, jd)
+	_ = dec
+
+	// HA should be near 0° (on the meridian)
+	haWrapped := ha
+	if haWrapped > 180 {
+		haWrapped -= 360
+	}
+	if math.Abs(haWrapped) > 1.0 {
+		t.Errorf("on-meridian HA = %.4f°, want ~0°", ha)
+	}
+}
+
 func BenchmarkGeodeticToICRF(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GeodeticToICRF(40.0, -74.0, 2451545.0)
+	}
+}
+
+func TestITRFToGeodetic_Roundtrip(t *testing.T) {
+	// Test roundtrip: geodetic → ITRF → geodetic
+	tests := []struct {
+		lat, lon float64
+	}{
+		{0, 0},
+		{45, 90},
+		{-45, -90},
+		{90, 0},    // north pole
+		{-90, 180}, // south pole
+		{51.5, -0.1},
+		{-33.9, 151.2},
+	}
+	for _, tc := range tests {
+		lat := tc.lat * deg2rad
+		lon := tc.lon * deg2rad
+		sinLat := math.Sin(lat)
+		cosLat := math.Cos(lat)
+		N := wgs84A / math.Sqrt(1.0-wgs84E2*sinLat*sinLat)
+		x := N * cosLat * math.Cos(lon)
+		y := N * cosLat * math.Sin(lon)
+		z := N * (1.0 - wgs84E2) * sinLat
+
+		gotLat, gotLon, gotH := ITRFToGeodetic(x, y, z)
+		if math.Abs(gotLat-tc.lat) > 1e-10 {
+			t.Errorf("lat=%.1f lon=%.1f: gotLat=%.12f, want %.1f", tc.lat, tc.lon, gotLat, tc.lat)
+		}
+		lonErr := math.Abs(gotLon - tc.lon)
+		if lonErr > 180 {
+			lonErr = 360 - lonErr
+		}
+		if lonErr > 1e-10 && math.Abs(tc.lat) < 89.99 { // skip lon check at poles
+			t.Errorf("lat=%.1f lon=%.1f: gotLon=%.12f, want %.1f", tc.lat, tc.lon, gotLon, tc.lon)
+		}
+		if math.Abs(gotH) > 1e-6 { // surface point → height ≈ 0
+			t.Errorf("lat=%.1f lon=%.1f: gotH=%.10f km, want ~0", tc.lat, tc.lon, gotH)
+		}
+	}
+}
+
+func TestITRFToGeodetic_Altitude(t *testing.T) {
+	// Point 100 km above the equator at prime meridian
+	alt := 100.0 // km
+	lat := 0.0
+	N := wgs84A / math.Sqrt(1.0-wgs84E2*math.Sin(lat)*math.Sin(lat))
+	x := N + alt
+	y := 0.0
+	z := 0.0
+
+	_, _, gotH := ITRFToGeodetic(x, y, z)
+	if math.Abs(gotH-alt) > 1e-6 {
+		t.Errorf("altitude: got %.10f km, want %.1f km", gotH, alt)
+	}
+}
+
+func TestIsSunlit_InSunlight(t *testing.T) {
+	// Object between Earth and Sun (closer to Earth) — should be sunlit
+	sunPos := [3]float64{1.5e8, 0, 0} // Sun at ~1 AU
+	objPos := [3]float64{42000, 0, 0}  // GEO orbit, same direction as Sun
+	if !IsSunlit(objPos, sunPos) {
+		t.Error("object in front of Earth toward Sun should be sunlit")
+	}
+}
+
+func TestIsSunlit_InShadow(t *testing.T) {
+	// Object directly behind Earth from Sun — should be in shadow
+	sunPos := [3]float64{1.5e8, 0, 0}
+	objPos := [3]float64{-42000, 0, 0} // opposite side of Earth from Sun
+	if IsSunlit(objPos, sunPos) {
+		t.Error("object behind Earth from Sun should be in shadow")
+	}
+}
+
+func TestIsSunlit_FarFromShadow(t *testing.T) {
+	// Object far above the ecliptic plane — should be sunlit
+	sunPos := [3]float64{1.5e8, 0, 0}
+	objPos := [3]float64{0, 0, 42000} // above north pole
+	if !IsSunlit(objPos, sunPos) {
+		t.Error("object far above ecliptic should be sunlit")
+	}
+}
+
+func TestIsBehindEarth(t *testing.T) {
+	observer := [3]float64{42000, 0, 0} // GEO, +X direction
+	target := [3]float64{-42000, 0, 0}  // opposite side
+	if !IsBehindEarth(observer, target) {
+		t.Error("target on opposite side of Earth should be behind Earth")
+	}
+
+	// Target same direction as observer but farther — not behind Earth
+	target2 := [3]float64{80000, 0, 0}
+	if IsBehindEarth(observer, target2) {
+		t.Error("target in same direction should not be behind Earth")
+	}
+}
+
+func TestTEMEToICRF_PreservesMagnitude(t *testing.T) {
+	// Rotation should preserve vector magnitude
+	posTEME := [3]float64{6778.0, 1234.0, -3456.0} // typical LEO position, km
+	jd := 2451545.0 + 365.25*10                     // 10 years from J2000
+
+	posICRF := TEMEToICRF(posTEME, jd)
+
+	magTEME := math.Sqrt(posTEME[0]*posTEME[0] + posTEME[1]*posTEME[1] + posTEME[2]*posTEME[2])
+	magICRF := math.Sqrt(posICRF[0]*posICRF[0] + posICRF[1]*posICRF[1] + posICRF[2]*posICRF[2])
+
+	if math.Abs(magICRF-magTEME) > 1e-10 {
+		t.Errorf("magnitude changed: TEME=%.10f ICRF=%.10f", magTEME, magICRF)
+	}
+}
+
+func TestTEMEToICRF_AtJ2000(t *testing.T) {
+	// At J2000, precession=identity, nutation is small, eq_eq is small.
+	// TEME and ICRF should nearly coincide.
+	posTEME := [3]float64{6778.0, 0.0, 0.0}
+	posICRF := TEMEToICRF(posTEME, j2000JD)
+
+	// Difference should be very small (only nutation + eq_eq at T=0)
+	diff := math.Sqrt(
+		(posICRF[0]-posTEME[0])*(posICRF[0]-posTEME[0]) +
+			(posICRF[1]-posTEME[1])*(posICRF[1]-posTEME[1]) +
+			(posICRF[2]-posTEME[2])*(posICRF[2]-posTEME[2]))
+	// At J2000, nutation is ~17 arcsec → ~0.56 km at 6778 km altitude
+	if diff > 1.0 {
+		t.Errorf("TEME≈ICRF at J2000 but diff=%.6f km", diff)
+	}
+}
+
+func TestTEMEToICRF_ChangesWithTime(t *testing.T) {
+	posTEME := [3]float64{6778.0, 1234.0, -3456.0}
+	pos1 := TEMEToICRF(posTEME, j2000JD)
+	pos2 := TEMEToICRF(posTEME, j2000JD+365.25*50) // 50 years later
+
+	// Precession should cause a measurable difference
+	diff := math.Sqrt(
+		(pos1[0]-pos2[0])*(pos1[0]-pos2[0]) +
+			(pos1[1]-pos2[1])*(pos1[1]-pos2[1]) +
+			(pos1[2]-pos2[2])*(pos1[2]-pos2[2]))
+	if diff < 1.0 {
+		t.Errorf("TEME→ICRF unchanged after 50 years: diff=%.6f km", diff)
+	}
+}
+
+func TestInertialFrame_Galactic(t *testing.T) {
+	// Galactic InertialFrame should match ICRFToGalactic
+	pos := [3]float64{1e8, -5e7, 2e7}
+	lat1, lon1 := ICRFToGalactic(pos[0], pos[1], pos[2])
+	lat2, lon2 := Galactic.LatLon(pos)
+
+	if math.Abs(lat1-lat2) > 1e-12 || math.Abs(lon1-lon2) > 1e-12 {
+		t.Errorf("Galactic frame mismatch: ICRFToGalactic=(%.10f,%.10f) frame=(%.10f,%.10f)",
+			lat1, lon1, lat2, lon2)
+	}
+}
+
+func TestInertialFrame_Ecliptic(t *testing.T) {
+	// Ecliptic InertialFrame should match ICRFToEcliptic
+	pos := [3]float64{1e8, -5e7, 2e7}
+	lat1, lon1 := ICRFToEcliptic(pos[0], pos[1], pos[2])
+	lat2, lon2 := Ecliptic.LatLon(pos)
+
+	if math.Abs(lat1-lat2) > 1e-10 || math.Abs(lon1-lon2) > 1e-10 {
+		t.Errorf("Ecliptic frame mismatch: ICRFToEcliptic=(%.10f,%.10f) frame=(%.10f,%.10f)",
+			lat1, lon1, lat2, lon2)
+	}
+}
+
+func TestInertialFrame_XYZ(t *testing.T) {
+	// XYZ on identity frame should return the same vector
+	identity := InertialFrame{
+		Name:   "Identity",
+		Matrix: [3][3]float64{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}},
+	}
+	pos := [3]float64{1.0, 2.0, 3.0}
+	result := identity.XYZ(pos)
+	for i := 0; i < 3; i++ {
+		if math.Abs(result[i]-pos[i]) > 1e-15 {
+			t.Errorf("identity XYZ[%d]: got %f want %f", i, result[i], pos[i])
+		}
+	}
+}
+
+func TestInertialFrame_ZeroVector(t *testing.T) {
+	lat, lon := Galactic.LatLon([3]float64{0, 0, 0})
+	if lat != 0 || lon != 0 {
+		t.Errorf("zero vector LatLon: got (%f, %f), want (0, 0)", lat, lon)
+	}
+}
+
+func TestTimeBasedFrame_ITRF(t *testing.T) {
+	// ITRF frame should rotate with Earth — two times 12h apart should differ
+	itrf := ITRFFrame()
+	pos := [3]float64{1e8, 0, 0}
+	v1 := itrf.XYZ(pos, j2000JD)
+	v2 := itrf.XYZ(pos, j2000JD+0.5) // 12 hours later
+
+	dot := v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+	mag := math.Sqrt(v1[0]*v1[0]+v1[1]*v1[1]+v1[2]*v1[2]) *
+		math.Sqrt(v2[0]*v2[0]+v2[1]*v2[1]+v2[2]*v2[2])
+	cosAngle := dot / mag
+
+	// 12h = 180° rotation, so vectors should be roughly anti-parallel (cos ≈ -1)
+	if cosAngle > -0.9 {
+		t.Errorf("ITRF 12h apart: cos(angle)=%.4f, want ≈ -1", cosAngle)
+	}
+}
+
+func TestTimeBasedFrame_ITRF_PreservesMagnitude(t *testing.T) {
+	itrf := ITRFFrame()
+	pos := [3]float64{6778.0, 1234.0, -3456.0}
+	v := itrf.XYZ(pos, j2000JD+365.25*10)
+
+	magIn := math.Sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2])
+	magOut := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+	if math.Abs(magOut-magIn) > 1e-8 {
+		t.Errorf("ITRF magnitude changed: %.10f → %.10f", magIn, magOut)
+	}
+}
+
+func BenchmarkAltaz(b *testing.B) {
+	pos := [3]float64{1.5e8, 0, 0}
+	for i := 0; i < b.N; i++ {
+		Altaz(pos, 40.0, -74.0, 2451545.0)
 	}
 }

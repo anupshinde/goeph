@@ -6,6 +6,8 @@ import (
 	"math"
 	"os"
 	"sort"
+
+	"github.com/anupshinde/goeph/coord"
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 	cKmPerDay = 299792.458 * secPerDay
 )
 
-// SPK holds a parsed SPK/DAF ephemeris file (supports Type 2 segments only).
+// SPK holds a parsed SPK/DAF ephemeris file (supports Type 2 and Type 3 segments).
 type SPK struct {
 	segments []segment
 	segMap   map[[2]int][]*segment // [target, center] → segments (sorted by startSec)
@@ -32,6 +34,7 @@ type chainLink struct {
 type segment struct {
 	target   int
 	center   int
+	dataType int     // SPK segment type (2 or 3)
 	startSec float64 // segment start epoch (TDB seconds past J2000) from DAF summary
 	endSec   float64 // segment end epoch (TDB seconds past J2000) from DAF summary
 	init     float64 // initial epoch (TDB seconds past J2000) from segment metadata
@@ -42,7 +45,7 @@ type segment struct {
 	data     []float64
 }
 
-// Open reads and parses an SPK file. Only Type 2 segments are supported.
+// Open reads and parses an SPK file. Type 2 and Type 3 segments are supported.
 func Open(filename string) (*SPK, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -106,7 +109,7 @@ func Open(filename string) (*SPK, error) {
 			startI := int(int32(binary.LittleEndian.Uint32(summary[intOff+16:])))
 			endI := int(int32(binary.LittleEndian.Uint32(summary[intOff+20:])))
 
-			if dataType != 2 {
+			if dataType != 2 && dataType != 3 {
 				return nil, fmt.Errorf("unsupported SPK type %d (target=%d, center=%d)", dataType, target, center)
 			}
 
@@ -130,6 +133,7 @@ func Open(filename string) (*SPK, error) {
 			seg := segment{
 				target:   target,
 				center:   center,
+				dataType: dataType,
 				startSec: startSec,
 				endSec:   endSec,
 				init:     data[nWords-4],
@@ -138,7 +142,14 @@ func Open(filename string) (*SPK, error) {
 				n:        int(data[nWords-1]),
 				data:     data[:nWords-4],
 			}
-			seg.nCoeffs = (seg.rsize - 2) / 3
+
+			// Type 2: position only → 3 components per record
+			// Type 3: position + velocity → 6 components per record
+			if dataType == 2 {
+				seg.nCoeffs = (seg.rsize - 2) / 3
+			} else {
+				seg.nCoeffs = (seg.rsize - 2) / 6
+			}
 
 			spk.segments = append(spk.segments, seg)
 			key := [2]int{target, center}
@@ -325,16 +336,15 @@ func (s *SPK) GeocentricPosition(body int, tdbJD float64) [3]float64 {
 	return sub3(bodyPos, earthPos)
 }
 
-// Observe computes the astrometric (light-time corrected) geocentric position
-// of a body in km, ICRF frame. Matches Skyfield's observe() behavior.
-func (s *SPK) Observe(body int, tdbJD float64) [3]float64 {
-	earthPos := s.earthWrtSSB(tdbJD)
+// observe is the internal implementation for light-time corrected positions.
+// Returns the position (observer-to-target) in km and the light time in days.
+func (s *SPK) observe(observer, body int, tdbJD float64) (pos [3]float64, lightTime float64) {
+	obsPos := s.bodyWrtSSB(observer, tdbJD)
 	bodyPos := s.bodyWrtSSB(body, tdbJD)
 
-	geo := sub3(bodyPos, earthPos)
-	dist := length3(geo)
+	pos = sub3(bodyPos, obsPos)
+	dist := length3(pos)
 
-	lightTime := 0.0
 	for i := 0; i < 10; i++ {
 		newLT := dist / cKmPerDay // light-time in days
 		if math.Abs(newLT-lightTime) < 1e-12 {
@@ -342,11 +352,76 @@ func (s *SPK) Observe(body int, tdbJD float64) [3]float64 {
 		}
 		lightTime = newLT
 		bodyPos = s.bodyWrtSSB(body, tdbJD-lightTime)
-		geo = sub3(bodyPos, earthPos)
-		dist = length3(geo)
+		pos = sub3(bodyPos, obsPos)
+		dist = length3(pos)
+	}
+	return
+}
+
+// Observe computes the astrometric (light-time corrected) geocentric position
+// of a body in km, ICRF frame. Matches Skyfield's observe() behavior.
+func (s *SPK) Observe(body int, tdbJD float64) [3]float64 {
+	pos, _ := s.observe(Earth, body, tdbJD)
+	return pos
+}
+
+// ObserveFrom computes the astrometric (light-time corrected) position of a
+// target body as seen from an observer body, in km, ICRF frame.
+func (s *SPK) ObserveFrom(observer, target int, tdbJD float64) [3]float64 {
+	pos, _ := s.observe(observer, target, tdbJD)
+	return pos
+}
+
+// Apparent computes the apparent position of a body as seen from Earth at tdbJD.
+// Applies light-time correction, gravitational deflection (Sun, Jupiter, Saturn),
+// and stellar aberration. Returns apparent position in km, GCRS frame.
+func (s *SPK) Apparent(body int, tdbJD float64) [3]float64 {
+	return s.ApparentFrom(Earth, body, tdbJD)
+}
+
+// ApparentFrom computes the apparent position of a target body as seen from an
+// observer body. Applies light-time correction, gravitational deflection
+// (Sun, Jupiter, Saturn), and stellar aberration.
+// Returns apparent position in km, GCRS frame.
+func (s *SPK) ApparentFrom(observer, target int, tdbJD float64) [3]float64 {
+	obsPos := s.bodyWrtSSB(observer, tdbJD)
+	obsVel := s.bodyVelWrtSSB(observer, tdbJD)
+
+	position, lightTime := s.observe(observer, target, tdbJD)
+
+	// Step 1: Gravitational deflection (Sun, Jupiter, Saturn — matching Skyfield defaults)
+	// For each deflector, compute its position at the time the light ray
+	// was closest to it (matching Skyfield's _compute_deflector_position).
+	type deflectorBody struct {
+		body  int
+		rmass float64
+	}
+	deflectors := [3]deflectorBody{
+		{Sun, 1.0},
+		{JupiterBarycenter, 1047.3486},
+		{SaturnBarycenter, 3497.898},
+	}
+	posMag := length3(position)
+	for _, d := range deflectors {
+		dPos := s.bodyWrtSSB(d.body, tdbJD)
+		gpv := sub3(dPos, obsPos) // observer-to-deflector at observation time
+
+		// Compute light-time to the closest-approach point on the ray
+		dlt := dot3(position, gpv) / (cKmPerDay * posMag)
+		tclose := tdbJD - lightTime + dlt
+
+		// Re-evaluate deflector position at the closest-approach time
+		dPos = s.bodyWrtSSB(d.body, tclose)
+		pe := sub3(dPos, obsPos)
+
+		correction := coord.Deflection(position, pe, d.rmass)
+		position = add3(position, correction)
 	}
 
-	return geo
+	// Step 2: Stellar aberration
+	position = coord.Aberration(position, obsVel, lightTime)
+
+	return position
 }
 
 // chebyshev evaluates a Chebyshev polynomial using the Clenshaw algorithm.
@@ -367,6 +442,112 @@ func chebyshev(coeffs []float64, s float64) float64 {
 		w0, w1 = coeffs[i]+s2*w0-w1, w0
 	}
 	return coeffs[0] + s*w0 - w1
+}
+
+// chebyshevDerivative evaluates the derivative of a Chebyshev polynomial series
+// at normalized time s in [-1, 1]. Uses the standard recurrence for converting
+// Chebyshev coefficients to derivative coefficients, then evaluates via Clenshaw.
+func chebyshevDerivative(coeffs []float64, s float64) float64 {
+	n := len(coeffs)
+	if n < 2 {
+		return 0
+	}
+
+	// Compute derivative coefficients dc[j] such that f'(x) = Σ dc[j] T_j(x).
+	// Recurrence (Numerical Recipes / IERS conventions):
+	//   dc[n-1] = dc[n] = 0  (conceptually)
+	//   dc[j] = dc[j+2] + 2*(j+1)*c[j+1]   for j = n-2 down to 1
+	//   dc[0] = (dc[2] + 2*c[1]) / 2
+	m := n - 1 // number of derivative coefficients
+	dc := make([]float64, m)
+
+	for j := m - 1; j >= 1; j-- {
+		var djp2 float64
+		if j+2 < m {
+			djp2 = dc[j+2]
+		}
+		dc[j] = djp2 + 2.0*float64(j+1)*coeffs[j+1]
+	}
+	var d2 float64
+	if m > 2 {
+		d2 = dc[2]
+	}
+	dc[0] = (d2 + 2.0*coeffs[1]) / 2.0
+
+	return chebyshev(dc, s)
+}
+
+// segVelocity evaluates velocity from a single segment at tdbJD.
+// Returns velocity in km/day, ICRF frame.
+func (s *SPK) segVelocity(target, center int, tdbJD float64) [3]float64 {
+	key := [2]int{target, center}
+	segs := s.segMap[key]
+	if len(segs) == 0 {
+		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
+	}
+
+	seconds := (tdbJD - j2000JD) * secPerDay
+	seg := findSegment(segs, seconds)
+
+	idx := int((seconds - seg.init) / seg.intLen)
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= seg.n {
+		idx = seg.n - 1
+	}
+
+	offset := seconds - seg.init - float64(idx)*seg.intLen
+	tc := 2.0*offset/seg.intLen - 1.0
+
+	recStart := idx * seg.rsize
+	var vel [3]float64
+
+	if seg.dataType == 3 {
+		// Type 3: velocity coefficients are stored after position coefficients.
+		// Evaluate the velocity Chebyshev directly (result is in km/s).
+		for comp := 0; comp < 3; comp++ {
+			cStart := recStart + 2 + (3+comp)*seg.nCoeffs
+			vel[comp] = chebyshev(seg.data[cStart:cStart+seg.nCoeffs], tc) * secPerDay // km/s → km/day
+		}
+	} else {
+		// Type 2: differentiate the position Chebyshev.
+		// Chain rule: d(pos)/d(days) = d(pos)/d(tc) * d(tc)/d(seconds) * d(seconds)/d(days)
+		//           = chebyshevDerivative * (2/intLen) * secPerDay
+		scale := 2.0 * secPerDay / seg.intLen
+		for comp := 0; comp < 3; comp++ {
+			cStart := recStart + 2 + comp*seg.nCoeffs
+			vel[comp] = chebyshevDerivative(seg.data[cStart:cStart+seg.nCoeffs], tc) * scale
+		}
+	}
+	return vel
+}
+
+// bodyVelWrtSSB computes a body's velocity relative to SSB in km/day
+// by summing velocities along the pre-computed chain.
+func (s *SPK) bodyVelWrtSSB(body int, tdbJD float64) [3]float64 {
+	if body == SSB {
+		return [3]float64{}
+	}
+	chain, ok := s.chains[body]
+	if !ok {
+		panic(fmt.Sprintf("spk: no chain to SSB for body %d (not in loaded SPK file)", body))
+	}
+	var vel [3]float64
+	for _, link := range chain {
+		segVel := s.segVelocity(link.target, link.center, tdbJD)
+		vel = add3(vel, segVel)
+	}
+	return vel
+}
+
+// EarthVelocity returns Earth's barycentric velocity in km/day, ICRF frame.
+func (s *SPK) EarthVelocity(tdbJD float64) [3]float64 {
+	return s.bodyVelWrtSSB(Earth, tdbJD)
+}
+
+func dot3(a, b [3]float64) float64 {
+	return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
 }
 
 func add3(a, b [3]float64) [3]float64 {

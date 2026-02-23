@@ -24,7 +24,8 @@ try:
     from skyfield.api import load, Star, Angle, N, W, wgs84
     from skyfield.earthlib import earth_rotation_angle, refraction
     from skyfield.timelib import tdb_minus_tt
-    from skyfield.functions import angle_between, length_of
+    from skyfield.functions import angle_between, length_of, rot_y, rot_z, mxm, mxv, to_spherical
+    from skyfield.framelib import itrs
 except ImportError:
     print("skyfield not found. Install with: pip install skyfield")
     sys.exit(1)
@@ -137,6 +138,13 @@ def main():
     phase_tests = []
     separation_tests = []
     elongation_tests = []
+    # --- Tier 2: Velocity and apparent positions ---
+    velocity_tests = []
+    apparent_tests = []
+    # --- Tier 2: Altaz (geocentric apparent → altitude/azimuth) ---
+    altaz_tests = []
+    # Bodies for altaz tests: Sun, Moon, Mars
+    ALTAZ_BODY_IDS = {10, 301, 4}
 
     for i, d in enumerate(dates):
         t = ts.from_datetime(d)
@@ -181,6 +189,45 @@ def main():
                 "ecl_lat_deg": float(ecl_lat),
                 "ecl_lon_deg": float(ecl_lon),
             })
+
+            # Tier 2: Velocity (km/day)
+            vel_km_s = astrometric.velocity.km_per_s
+            velocity_tests.append({
+                "tdb_jd": tt_jd,
+                "body_id": naif_id,
+                "vel_km_day": [float(v * 86400) for v in vel_km_s],
+            })
+
+            # Tier 2: Apparent position (km)
+            apparent = astrometric.apparent()
+            app_km = apparent.position.km
+            apparent_tests.append({
+                "tdb_jd": tt_jd,
+                "body_id": naif_id,
+                "pos_km": [float(app_km[0]), float(app_km[1]), float(app_km[2])],
+            })
+
+            # Tier 2: Altaz — apply Skyfield's rotation to geocentric apparent position
+            if naif_id in ALTAZ_BODY_IDS:
+                app_km_arr = np.array(app_km)
+                R_itrs = itrs.rotation_at(t)
+                for loc_name, lat, lon, loc_obj in skyfield_locations:
+                    R_lat = rot_y(np.radians(lat))[::-1]
+                    R_latlon = mxm(R_lat, rot_z(-np.radians(lon)))
+                    R = mxm(R_latlon, R_itrs)
+                    pos_local = mxv(R, app_km_arr)
+                    r, alt_rad, az_rad = to_spherical(pos_local)
+                    altaz_tests.append({
+                        "tdb_jd": tt_jd,
+                        "ut1_jd": ut1_jd,
+                        "body_id": naif_id,
+                        "loc_name": loc_name,
+                        "lat": lat,
+                        "lon": lon,
+                        "alt_deg": float(np.degrees(alt_rad)),
+                        "az_deg": float(np.degrees(az_rad)),
+                        "dist_km": float(r),
+                    })
 
         # Galactic Center
         gc_obs = earth.at(t).observe(gc_star)
@@ -244,14 +291,23 @@ def main():
         moon_pos_km = moon_astrometric.position.km
 
         # Phase angle for Moon (Sun-Moon-Earth angle)
+        # Include the exact vectors Skyfield uses internally so Go test can validate
+        # PhaseAngle() as a pure function without SPK reconstruction errors.
+        # Skyfield's phase_angle: u = obs_to_target, v = u - sun_ssb + earth_ssb = sun_to_target
         moon_phase_angle = moon_astrometric.phase_angle(sun_body).degrees
         moon_frac = moon_astrometric.fraction_illuminated(sun_body)
+        sun_at_t = sun_body.at(t)
+        earth_bary = earth.at(t)
+        moon_u = moon_astrometric.position.km
+        moon_v = moon_u - sun_at_t.position.km + earth_bary.position.km
 
         phase_tests.append({
             "tdb_jd": tt_jd,
             "body_name": "moon",
             "phase_angle_deg": float(moon_phase_angle),
             "fraction_illuminated": float(moon_frac),
+            "obs_to_target_km": [float(x) for x in moon_u],
+            "sun_to_target_km": [float(x) for x in moon_v],
         })
 
         # Phase angle for planets (Mercury, Venus, Mars, Jupiter, Saturn)
@@ -261,11 +317,15 @@ def main():
                 body_astrometric = earth.at(t).observe(body)
                 pa = body_astrometric.phase_angle(sun_body).degrees
                 fi = body_astrometric.fraction_illuminated(sun_body)
+                u = body_astrometric.position.km
+                v = u - sun_at_t.position.km + earth_bary.position.km
                 phase_tests.append({
                     "tdb_jd": tt_jd,
                     "body_name": body_name,
                     "phase_angle_deg": float(pa),
                     "fraction_illuminated": float(fi),
+                    "obs_to_target_km": [float(x) for x in u],
+                    "sun_to_target_km": [float(x) for x in v],
                 })
 
         # Separation angle: Sun-Moon
@@ -378,6 +438,21 @@ def main():
     write_json("golden_refraction.json", {
         "description": "Atmospheric refraction from Skyfield Bennett formula",
         "tests": refraction_tests,
+    })
+
+    write_json("golden_velocity.json", {
+        "description": "Astrometric velocity from Skyfield observe().velocity.km_per_s * 86400 (km/day)",
+        "tests": velocity_tests,
+    })
+
+    write_json("golden_apparent.json", {
+        "description": "Apparent positions from Skyfield observe().apparent().position.km",
+        "tests": apparent_tests,
+    })
+
+    write_json("golden_altaz.json", {
+        "description": "Altitude/azimuth from Skyfield rotation applied to geocentric apparent positions",
+        "tests": altaz_tests,
     })
 
     print("Done.")
