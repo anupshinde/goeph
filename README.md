@@ -110,7 +110,19 @@ func main() {
 }
 ```
 
-See [`examples/`](examples/) for 24 runnable examples covering the full API, or [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
+## Examples
+
+```bash
+# See where planets are in the sky from a ground location
+go run examples/altaz/main.go
+
+# Find sunrise/sunset times and moon phases
+go run examples/almanac/main.go
+```
+
+For more examples, see [`examples/README.md`](examples/README.md). There are 24 runnable examples covering the full API.
+
+See also [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
 
 ---
 
