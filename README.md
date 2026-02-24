@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/anupshinde/goeph/actions/workflows/test.yml/badge.svg)](https://github.com/anupshinde/goeph/actions/workflows/test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/anupshinde/goeph)](https://goreportcard.com/report/github.com/anupshinde/goeph)
+[![Go Reference](https://pkg.go.dev/badge/github.com/anupshinde/goeph.svg)](https://pkg.go.dev/github.com/anupshinde/goeph)
 
 A fast Go library for computing planetary positions from JPL ephemeris files.
 
