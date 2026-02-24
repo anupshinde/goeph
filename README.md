@@ -71,6 +71,19 @@ Contributions for any of these are welcome — see "Project status & support" be
 
 ---
 
+## Installation
+
+```bash
+go get github.com/anupshinde/goeph
+```
+
+An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also download others from NASA:
+- [de440s.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp) (~32 MB, 1849-2150) — included & tested
+- [de421.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.bsp) (~17 MB, 1900-2050) — untested
+- [de440.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp) (~115 MB, 1550-2650) — untested
+
+---
+
 ## Quick start
 
 ```go
@@ -124,19 +137,6 @@ go run examples/almanac/main.go
 For more examples, see [`examples/README.md`](examples/README.md). There are 24 runnable examples covering the full API.
 
 See also [`validation/generate_data_go/`](validation/generate_data_go/) for a complete working pipeline that computes positions for all planets, satellites, and ground locations, outputting to CSV.
-
----
-
-## Installation
-
-```bash
-go get github.com/anupshinde/goeph
-```
-
-An ephemeris file (`de440s.bsp`, ~32 MB) is included in `data/`. You can also download others from NASA:
-- [de440s.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp) (~32 MB, 1849-2150) — included & tested
-- [de421.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de421.bsp) (~17 MB, 1900-2050) — untested
-- [de440.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp) (~115 MB, 1550-2650) — untested
 
 ---
 
@@ -265,12 +265,10 @@ In addition to golden tests, the [`validation/`](validation/) directory contains
 
 ## Project status & support
 
-This is a **personal research artifact published as-is.**
-
-- No guaranteed support, response time, or roadmap.
-- I use this myself. If it breaks for my use case, I'll fix it.
+This project grew out of a personal research need and is published for the community. I maintain it for my own use cases, but I'm not able to provide general support.
 - PRs are accepted if they:
-  - Pass golden tests
+  - Pass golden tests (`make test`)
+  - Pass end-to-end validation if core computation changed ([`validation/`](validation/) — requires Python + Skyfield, run manually; typically passes if golden tests pass)
   - Reduce error vs Skyfield, or improve performance without increasing error
   - Don't expand scope without strong justification
 
@@ -292,7 +290,7 @@ This project was **coded by [Claude Opus 4.6](https://claude.ai)** (Anthropic), 
 - Benchmarking and output comparison against Skyfield was done collaboratively
 - The golden test strategy ensures correctness is verifiable regardless of how the code was written
 
-Most of the code itself is not reviewed manually, unless when it was absolutely needed — the outputs were measured for correctness over very long periods. The golden test harness ensures correctness is measurable, not assumed.
+Most of the code itself is not reviewed manually, except when absolutely needed — the outputs were measured for correctness over very long periods. The golden test harness ensures correctness is measurable, not assumed.
 
 The code is the code. The tests are the tests. Judge it by its outputs.
 
