@@ -50,7 +50,7 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Unit types** — `Angle` (degrees, hours, radians, DMS, HMS) and `Distance` (km, AU, meters, light-seconds)
 - **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
 - **Geometric computations** — line-sphere intersection for shadow/limb checks
-- **Computes lunar node longitudes** (Meeus formula — not part of Skyfield, added separately)
+- **Computes lunar node longitudes** — true node from ephemeris state vectors (r x v), mean node via Meeus formula
 - **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion and rise/culmination/set event finding
 - **Event search** — generic discrete event finding (bisection) and extrema finding (golden section) for time-series data
 - **Almanac** — sunrise/sunset, twilight levels, moon phases, seasons, body risings/settings, meridian transits, oppositions/conjunctions
@@ -159,7 +159,7 @@ See also [`validation/generate_data_go/`](validation/generate_data_go/) for a co
 | `eclipse` | `goeph/eclipse` | Lunar eclipse detection: penumbral, partial, and total eclipses with magnitudes |
 | `projection` | `goeph/projection` | Stereographic projection of sky positions onto a 2D plane for star charts |
 | `constellation` | `goeph/constellation` | IAU constellation identification from RA/Dec (88 constellations, grid-based binary search) |
-| `lunarnodes` | `goeph/lunarnodes` | Mean lunar node ecliptic longitudes (not from Skyfield; uses Meeus formula) |
+| `lunarnodes` | `goeph/lunarnodes` | True lunar node from ephemeris state vectors (`TrueNode`), mean node via Meeus polynomial (`MeanLunarNodes`) |
 
 ---
 
@@ -236,7 +236,8 @@ goeph outputs are verified against Skyfield (Python) using a golden-test approac
 | Phase angle | < 1e-8° | Exact input vectors from Skyfield; formula-level agreement |
 | Elongation | < 1e-10° | Pure modular arithmetic |
 | Refraction | < 1e-10° | Same Bennett 1982 formula |
-| Lunar nodes | < 1e-8° | Identical Meeus formula |
+| Mean lunar nodes | < 1e-8° | Identical Meeus formula |
+| True lunar nodes | < 1e-6° | Validated against Skyfield's osculating_elements_of() (independent code path) |
 | Seasons | < 1 day | J2000 ecliptic vs Skyfield's ecliptic of date (~18 hours) |
 | Moon phases | < 3 min | Relative longitude cancels frame difference (measured max ~4 sec) |
 | Sunrise/sunset | < 3 min | Altaz chain; no ecliptic frame dependency (measured max ~1 sec) |
