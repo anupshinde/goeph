@@ -555,9 +555,20 @@ func (s *SPK) bodyVelWrtSSB(body int, tdbJD float64) [3]float64 {
 	return vel
 }
 
+// BodyVelocity returns a body's velocity relative to the Solar System Barycenter
+// in km/day, ICRF frame.
+func (s *SPK) BodyVelocity(body int, tdbJD float64) [3]float64 {
+	return s.bodyVelWrtSSB(body, tdbJD)
+}
+
 // EarthVelocity returns Earth's barycentric velocity in km/day, ICRF frame.
 func (s *SPK) EarthVelocity(tdbJD float64) [3]float64 {
-	return s.bodyVelWrtSSB(Earth, tdbJD)
+	return s.BodyVelocity(Earth, tdbJD)
+}
+
+// GeocentricVelocity returns a body's velocity relative to Earth in km/day, ICRF frame.
+func (s *SPK) GeocentricVelocity(body int, tdbJD float64) [3]float64 {
+	return sub3(s.BodyVelocity(body, tdbJD), s.BodyVelocity(Earth, tdbJD))
 }
 
 func dot3(a, b [3]float64) float64 {

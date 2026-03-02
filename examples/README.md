@@ -76,4 +76,4 @@ go run ./examples/apparent/
 |---|---|
 | [units](units/) | Working with Angle and Distance types |
 | [satellite](satellite/) | SGP4 satellite propagation from TLE |
-| [lunarnodes](lunarnodes/) | Mean lunar node ecliptic longitudes |
+| [lunarnodes](lunarnodes/) | True and mean lunar node ecliptic longitudes |

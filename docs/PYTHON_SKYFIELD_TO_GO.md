@@ -98,7 +98,7 @@ The full rotation chain is: `ICRF = B^T · P^T · N^T · R₃(GAST) · ITRF` (wh
 ### Step 6: Other Components
 
 - **Galactic Center**: Fixed J2000 RA/Dec (Sgr A*: 17h45m40.0409s, -29°00'28.118") converted to an ICRF unit vector. Since it's effectively at infinity, no light-time correction is needed.
-- **Lunar Nodes**: Direct port of the Meeus formula: `Ω = 125.04452 - 1934.136261·T + 0.0020708·T² + T³/450000`.
+- **Lunar Nodes (mean)**: Direct port of the Meeus formula: `Ω = 125.04452 - 1934.136261·T + 0.0020708·T² + T³/450000`. The `lunarnodes` package also provides `TrueNode()` which computes the instantaneous node from Moon state vectors — see `docs/TRUE_LUNAR_NODE.md`.
 - **Satellites**: Three artificial satellites (FastISS, AntiISS, PoleSat) propagated via SGP4 using the `go-satellite` library with modified TLE data.
 - **Time Conversion**: UTC → TT (via leap second table + 32.184s) → UT1 (via ΔT table). TDB ≈ TT for ephemeris lookups. See `timescale/` package.
 
@@ -178,7 +178,7 @@ goeph/
 ├── timescale/           # ΔT table, leap second table, UTC→TT→UT1 conversion
 ├── satellite/           # SGP4/TLE satellite propagation (wraps go-satellite)
 ├── star/                # Galactic Center (Sgr A*) fixed RA/Dec → ICRF
-└── lunarnodes/          # Mean lunar node longitude (Meeus formula)
+└── lunarnodes/          # Lunar node longitudes (true from ephemeris + mean via Meeus)
 ```
 
 Ground locations (6 sites: Null Island, Chicago, London, Cushing, NY, Mumbai) and satellite TLE definitions are in `compute.go`.
