@@ -107,6 +107,30 @@ func meanObliquity(T float64) float64 {
 	return (84381.448 + T*(-46.8150+T*(-0.00059+T*0.001813))) * arcsec2rad
 }
 
+// MeanObliquityDeg returns the mean obliquity of the ecliptic in degrees
+// for the given TT Julian date. Uses the Lieske (1979) polynomial,
+// consistent with Skyfield and IAU standards.
+func MeanObliquityDeg(jdTT float64) float64 {
+	T := (jdTT - j2000JD) / 36525.0
+	return meanObliquity(T) * rad2deg
+}
+
+// NutationDeg returns nutation in longitude (dpsi) and obliquity (deps) in degrees
+// for the given TT Julian date.
+func NutationDeg(jdTT float64) (dpsiDeg, depsDeg float64) {
+	T := (jdTT - j2000JD) / 36525.0
+	dpsiRad, depsRad := nutationAngles(T)
+	return dpsiRad * rad2deg, depsRad * rad2deg
+}
+
+// TrueObliquityDeg returns the true obliquity (mean + nutation in obliquity)
+// in degrees for the given TT Julian date.
+func TrueObliquityDeg(jdTT float64) float64 {
+	T := (jdTT - j2000JD) / 36525.0
+	_, depsRad := nutationAngles(T)
+	return (meanObliquity(T) + depsRad) * rad2deg
+}
+
 // nutationAngles computes nutation in longitude (dpsi) and obliquity (deps).
 // T is Julian centuries from J2000 TDB.
 // Returns dpsi and deps in radians.

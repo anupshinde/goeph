@@ -197,6 +197,82 @@ func TestGAST(t *testing.T) {
 	}
 }
 
+func TestMeanObliquityDeg(t *testing.T) {
+	// At J2000 epoch, mean obliquity ≈ 23.4393°
+	got := MeanObliquityDeg(j2000JD)
+	if math.Abs(got-23.4393) > 0.001 {
+		t.Errorf("MeanObliquityDeg(J2000) = %.6f, want ~23.4393", got)
+	}
+
+	// Should decrease over centuries
+	later := MeanObliquityDeg(j2000JD + 36525.0) // 1 century later
+	if later >= got {
+		t.Errorf("obliquity should decrease: J2000=%.6f, +100y=%.6f", got, later)
+	}
+}
+
+func TestMeanObliquityDeg_MatchesInternal(t *testing.T) {
+	// Verify the exported function matches the internal function
+	for _, jd := range []float64{j2000JD, j2000JD - 36525, j2000JD + 18262.5} {
+		T := (jd - j2000JD) / 36525.0
+		want := meanObliquity(T) * rad2deg
+		got := MeanObliquityDeg(jd)
+		if got != want {
+			t.Errorf("jd=%.1f: MeanObliquityDeg=%.15f, internal=%.15f", jd, got, want)
+		}
+	}
+}
+
+func TestNutationDeg(t *testing.T) {
+	dpsi, deps := NutationDeg(j2000JD)
+	// Nutation at J2000 should be small (within a few arcseconds = fractions of a degree)
+	if math.Abs(dpsi) > 0.01 || math.Abs(deps) > 0.01 {
+		t.Errorf("NutationDeg(J2000) = (%.6f, %.6f), want small values", dpsi, deps)
+	}
+	if dpsi == 0 && deps == 0 {
+		t.Error("NutationDeg(J2000) is exactly zero (unexpected)")
+	}
+}
+
+func TestNutationDeg_MatchesInternal(t *testing.T) {
+	for _, jd := range []float64{j2000JD, j2000JD + 10000, j2000JD - 20000} {
+		T := (jd - j2000JD) / 36525.0
+		wantDpsi, wantDeps := nutationAngles(T)
+		gotDpsi, gotDeps := NutationDeg(jd)
+		if math.Abs(gotDpsi-wantDpsi*rad2deg) > 1e-15 {
+			t.Errorf("jd=%.1f: dpsi mismatch", jd)
+		}
+		if math.Abs(gotDeps-wantDeps*rad2deg) > 1e-15 {
+			t.Errorf("jd=%.1f: deps mismatch", jd)
+		}
+	}
+}
+
+func TestTrueObliquityDeg(t *testing.T) {
+	// True obliquity = mean + nutation in obliquity
+	jd := j2000JD
+	mean := MeanObliquityDeg(jd)
+	_, deps := NutationDeg(jd)
+	want := mean + deps
+	got := TrueObliquityDeg(jd)
+	if math.Abs(got-want) > 1e-14 {
+		t.Errorf("TrueObliquityDeg(J2000) = %.15f, want %.15f", got, want)
+	}
+}
+
+func TestTrueObliquityDeg_DiffersFromMean(t *testing.T) {
+	jd := j2000JD + 5000
+	mean := MeanObliquityDeg(jd)
+	trueObl := TrueObliquityDeg(jd)
+	if mean == trueObl {
+		t.Error("true obliquity should differ from mean (nutation != 0)")
+	}
+	// Difference should be small (nutation in obliquity < ~10 arcsec ≈ 0.003°)
+	if math.Abs(trueObl-mean) > 0.01 {
+		t.Errorf("true-mean = %.6f°, too large", trueObl-mean)
+	}
+}
+
 func TestNutationAngles(t *testing.T) {
 	dpsi, deps := nutationAngles(0)
 	dpsiArcsec := dpsi / arcsec2rad

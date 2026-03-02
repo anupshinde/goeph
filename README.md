@@ -145,7 +145,7 @@ See also [`validation/generate_data_go/`](validation/generate_data_go/) for a co
 | Package | Import | What it does |
 |---------|--------|-------------|
 | `spk` | `goeph/spk` | SPK/DAF ephemeris file parser (Type 2 + 3), Chebyshev evaluation, positions (geometric, astrometric, apparent), velocity, arbitrary observer |
-| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec, geodetic↔ICRF↔ITRF, galactic, altaz, hour angle/dec, TEME↔ICRF, GMST/GAST/ERA, nutation, precession, aberration, deflection, angles, refraction, visibility, generic frame types |
+| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec, geodetic↔ICRF↔ITRF, galactic, altaz, hour angle/dec, TEME↔ICRF, GMST/GAST/ERA, nutation, precession, aberration, deflection, angles, refraction, visibility, generic frame types, obliquity/nutation helpers (`MeanObliquityDeg`, `NutationDeg`, `TrueObliquityDeg`) |
 | `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T cubic spline (1800-2200), TDB-TT |
 | `elements` | `goeph/elements` | Osculating Keplerian orbital elements from state vectors |
 | `magnitude` | `goeph/magnitude` | Planetary visual magnitudes (Mallama & Hilton 2018 phase curves) |
@@ -180,7 +180,7 @@ coord.SetNutationPrecision(coord.NutationFull)
 coord.SetNutationPrecision(coord.NutationStandard)
 ```
 
-**When to use which:** Nutation only affects functions that use equator-of-date transforms (`Altaz`, `HourAngleDec`, `GeodeticToICRF`, `TEMEToICRF`, `ITRFFrame`). Position computations (`Observe`, `Apparent`, coordinate conversions) are unaffected by this setting. In both modes, the dominant error sources are light-time correction (~20 arcsec) and GMST formula difference (~0.3 arcsec/century), which dwarf the nutation precision difference. Use `NutationFull` only when you need sub-arcsecond nutation accuracy or exact Skyfield parity.
+**When to use which:** Nutation only affects functions that use equator-of-date transforms (`Altaz`, `HourAngleDec`, `GeodeticToICRF`, `TEMEToICRF`, `ITRFFrame`) and the nutation-dependent helpers (`NutationDeg`, `TrueObliquityDeg`). Position computations (`Observe`, `Apparent`, coordinate conversions) and `MeanObliquityDeg` are unaffected by this setting. In both modes, the dominant error sources are light-time correction (~20 arcsec) and GMST formula difference (~0.3 arcsec/century), which dwarf the nutation precision difference. Use `NutationFull` only when you need sub-arcsecond nutation accuracy or exact Skyfield parity.
 
 **Performance impact:** `NutationFull` is ~70x slower per nutation call (~10.5 μs vs ~150 ns). In end-to-end workloads that include altaz/geodetic computations, this translates to ~5-7x slower overall (nutation is one step among many). With `NutationStandard`, goeph is ~14x faster than Skyfield; with `NutationFull`, ~2-3x faster. Skyfield defaults to the full IAU 2000A series (678 luni-solar + 687 planetary terms) but also provides an `iau2000b()` variant (77 luni-solar, 0 planetary) for faster computation. goeph's `NutationFull` matches Skyfield's default for apples-to-apples comparison, while `NutationStandard` (30 terms) is a different truncation than Skyfield's `iau2000b()` but serves a similar speed-vs-precision tradeoff. The ~1 arcsec difference from `NutationStandard` is negligible for most applications.
 
