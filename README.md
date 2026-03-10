@@ -56,13 +56,12 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Almanac** — sunrise/sunset, twilight levels, moon phases, seasons, body risings/settings, meridian transits, oppositions/conjunctions
 - **Star positions** — proper motion, parallax, and radial velocity propagation from catalog epoch to any date
 - **Kepler orbit propagation** — elliptic, parabolic, and hyperbolic orbits for asteroids and comets
-- **Lunar eclipse detection** — finds penumbral, partial, and total lunar eclipses with magnitudes and shadow geometry
+- **Eclipse detection** — lunar eclipses (penumbral/partial/total with magnitudes) and solar eclipse classification (total/annular/partial via shadow cone geometry)
 - **Stereographic projection** — project sky positions onto a 2D plane for star charts (conformal, preserves angles)
 - **Constellation identification** — identify which of the 88 IAU constellations contains a given RA/Dec position (grid-based binary search lookup)
 
 ## What it doesn't do
 
-- No solar eclipse computation
 - No star catalog file loading (Hipparcos/Tycho-2 parsers)
 - No SPK Type 13/21 support
 - GMST uses IAU 1982 formula (Skyfield uses IERS 2000 ERA-based) — introduces ~0.3 arcsec/century drift
@@ -156,7 +155,7 @@ See also [`validation/generate_data_go/`](validation/generate_data_go/) for a co
 | `satellite` | `goeph/satellite` | SGP4 satellite propagation, sub-satellite point, TEME→ICRF conversion, rise/culmination/set event finding |
 | `star` | `goeph/star` | Star positions with proper motion, parallax, and radial velocity propagation; Galactic Center ICRF direction |
 | `kepler` | `goeph/kepler` | Keplerian orbit propagation for asteroids and comets (elliptic, parabolic, hyperbolic) |
-| `eclipse` | `goeph/eclipse` | Lunar eclipse detection: penumbral, partial, and total eclipses with magnitudes |
+| `eclipse` | `goeph/eclipse` | Lunar and solar eclipse detection: type classification, magnitudes, shadow cone geometry |
 | `projection` | `goeph/projection` | Stereographic projection of sky positions onto a 2D plane for star charts |
 | `constellation` | `goeph/constellation` | IAU constellation identification from RA/Dec (88 constellations, grid-based binary search) |
 | `lunarnodes` | `goeph/lunarnodes` | True lunar node from ephemeris state vectors (`TrueNode`), mean node via Meeus polynomial (`MeanLunarNodes`) |
