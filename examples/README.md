@@ -47,7 +47,7 @@ go run ./examples/apparent/
 |---|---|
 | [search](search/) | Find season changes (equinoxes/solstices) using FindDiscrete |
 | [almanac](almanac/) | Sunrise/sunset, moon phases, and seasons for a ground observer |
-| [eclipse](eclipse/) | Find lunar eclipses and classify them (penumbral/partial/total) |
+| [eclipse](eclipse/) | Find lunar eclipses and classify solar eclipses (total/annular/partial) |
 
 ### Orbital mechanics and photometry
 

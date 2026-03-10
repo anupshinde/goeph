@@ -167,6 +167,68 @@ func TestMoonShadowSeparation(t *testing.T) {
 	}
 }
 
+func TestClassifyLunarEclipse(t *testing.T) {
+	// November 8, 2022 total lunar eclipse — call the exported function directly.
+	// JD ~2459891.96 is near maximum.
+	ecl := ClassifyLunarEclipse(testEph, 2459891.96)
+	if ecl.Kind != Total {
+		t.Errorf("expected Total (3), got kind=%d", ecl.Kind)
+	}
+	if ecl.UmbralMag < 1.0 {
+		t.Errorf("total eclipse umbral mag %.4f, want >= 1.0", ecl.UmbralMag)
+	}
+
+	// At a random non-eclipse time, should return Kind=0.
+	ecl2 := ClassifyLunarEclipse(testEph, 2451552.0) // first quarter
+	if ecl2.Kind != 0 {
+		t.Errorf("expected no eclipse, got kind=%d", ecl2.Kind)
+	}
+}
+
+func TestClassifySolarEclipse_Total2017(t *testing.T) {
+	// August 21, 2017 — total solar eclipse (greatest eclipse ~18:26 UTC).
+	// JD 2457987.268856 ≈ 2017-08-21 18:26 TT.
+	ecl := ClassifySolarEclipse(testEph, 2457987.268856)
+	t.Logf("2017 total solar: kind=%d, gamma=%.4f, umbralR=%.1f km, penumbralR=%.1f km",
+		ecl.Kind, ecl.Gamma, ecl.UmbralRadiusKm, ecl.PenumbralRadiusKm)
+
+	if ecl.Kind != SolarTotal {
+		t.Errorf("expected SolarTotal (3), got kind=%d", ecl.Kind)
+	}
+	// Gamma should be small (shadow axis near Earth center).
+	if ecl.Gamma > 1.5 {
+		t.Errorf("gamma %.4f too large for a known eclipse", ecl.Gamma)
+	}
+	// Umbral radius should be positive for a total eclipse.
+	if ecl.UmbralRadiusKm <= 0 {
+		t.Errorf("umbral radius %.1f km, want > 0 for total eclipse", ecl.UmbralRadiusKm)
+	}
+}
+
+func TestClassifySolarEclipse_Annular2023(t *testing.T) {
+	// October 14, 2023 — annular solar eclipse (greatest eclipse ~18:00 UTC).
+	// JD 2460232.250801 ≈ 2023-10-14 18:00 TT.
+	ecl := ClassifySolarEclipse(testEph, 2460232.250801)
+	t.Logf("2023 annular solar: kind=%d, gamma=%.4f, umbralR=%.1f km, penumbralR=%.1f km",
+		ecl.Kind, ecl.Gamma, ecl.UmbralRadiusKm, ecl.PenumbralRadiusKm)
+
+	if ecl.Kind != SolarAnnular {
+		t.Errorf("expected SolarAnnular (2), got kind=%d", ecl.Kind)
+	}
+	// Umbral radius should be negative for an annular eclipse (antumbra).
+	if ecl.UmbralRadiusKm >= 0 {
+		t.Errorf("umbral radius %.1f km, want < 0 for annular eclipse", ecl.UmbralRadiusKm)
+	}
+}
+
+func TestClassifySolarEclipse_None(t *testing.T) {
+	// A random date with no solar eclipse (first quarter moon).
+	ecl := ClassifySolarEclipse(testEph, 2451552.0)
+	if ecl.Kind != 0 {
+		t.Errorf("expected no eclipse, got kind=%d", ecl.Kind)
+	}
+}
+
 func TestEclipticElongation(t *testing.T) {
 	// Test with simple vectors.
 	// Moon at ecliptic lon=0, Sun at ecliptic lon=0 → elongation = 0.

@@ -1,8 +1,9 @@
-// Package eclipse provides lunar eclipse detection and characterization.
+// Package eclipse provides lunar and solar eclipse detection and characterization.
 //
-// It finds times when the Moon enters Earth's shadow, classifies eclipses as
-// penumbral, partial, or total, and computes eclipse magnitudes. Uses the
-// Danjon enlargement correction (2% atmospheric enlargement of Earth's shadow).
+// It finds times when the Moon enters Earth's shadow (lunar eclipses) or the
+// Moon's shadow falls on Earth (solar eclipses). Classifies eclipses by type
+// and computes magnitudes. Uses the Danjon enlargement correction (2%
+// atmospheric enlargement of Earth's shadow) for lunar eclipses.
 package eclipse
 
 import (
@@ -13,10 +14,15 @@ import (
 )
 
 const (
-	// Eclipse type constants returned in LunarEclipse.Kind.
+	// Lunar eclipse type constants returned in LunarEclipse.Kind.
 	Penumbral = 1 // Moon enters penumbra only
 	Partial   = 2 // Moon partially enters umbra
 	Total     = 3 // Moon fully within umbra
+
+	// Solar eclipse type constants returned in SolarEclipse.Kind.
+	SolarPartial = 1 // Moon partially covers Sun
+	SolarAnnular = 2 // Moon inside Sun's disk but smaller
+	SolarTotal   = 3 // Moon fully covers Sun
 
 	// Physical constants.
 	sunRadiusKm   = 695700.0
@@ -118,7 +124,7 @@ func FindLunarEclipses(eph *spk.SPK, startJD, endJD float64) ([]LunarEclipse, er
 		}
 
 		// Step 3: Compute full shadow geometry at the minimum.
-		ecl := classifyEclipse(eph, best.T)
+		ecl := ClassifyLunarEclipse(eph, best.T)
 		if ecl.Kind > 0 {
 			eclipses = append(eclipses, ecl)
 		}
@@ -152,9 +158,9 @@ func moonShadowSeparation(eph *spk.SPK, tdbJD float64) float64 {
 	return math.Sqrt(perpX*perpX + perpY*perpY + perpZ*perpZ)
 }
 
-// classifyEclipse computes the full eclipse geometry at a given time and
-// returns a LunarEclipse if the Moon is at least partially in the penumbra.
-func classifyEclipse(eph *spk.SPK, tdbJD float64) LunarEclipse {
+// ClassifyLunarEclipse computes the full eclipse geometry at a given time and
+// returns a LunarEclipse. If the Moon is not in the penumbra, Kind is 0.
+func ClassifyLunarEclipse(eph *spk.SPK, tdbJD float64) LunarEclipse {
 	sunPos := eph.GeocentricPosition(spk.Sun, tdbJD)
 	moonPos := eph.GeocentricPosition(spk.Moon, tdbJD)
 
@@ -205,6 +211,129 @@ func classifyEclipse(eph *spk.SPK, tdbJD float64) LunarEclipse {
 	}
 
 	return ecl
+}
+
+// SolarEclipse describes a solar eclipse event using geocentric shadow cone
+// geometry. This determines whether a solar eclipse is occurring somewhere on
+// Earth and classifies its type. Suitable for chart-level flags; for local
+// visibility or path computation, topocentric parallax and Earth's ellipsoidal
+// shape must be considered.
+//
+// Note: Skyfield's experimental design/solar_eclipse.py takes the topocentric
+// approach — projecting the Moon's shadow onto Earth's WGS84 ellipsoid via
+// line-ellipsoid intersection to compute the ground track. That is needed for
+// mapping eclipse paths but is far more complex than what is required here.
+// This implementation uses the simpler shadow cone approach (inverse of the
+// lunar eclipse geometry): compute the Moon's umbral/penumbral cone radii at
+// Earth's distance and check whether Earth's disk intersects those cones.
+type SolarEclipse struct {
+	// T is the TDB Julian date of the classification instant.
+	T float64
+
+	// Kind is the eclipse type: 0 (none), SolarPartial (1),
+	// SolarAnnular (2), or SolarTotal (3).
+	Kind int
+
+	// Gamma is the closest approach of the Moon's shadow axis to Earth's
+	// center, in Earth radii. |Gamma| < 1 means the shadow axis crosses
+	// Earth's disk (central eclipse). Values up to ~1.5 can still produce
+	// a partial eclipse.
+	Gamma float64
+
+	// UmbralRadiusKm is the Moon's umbral cone radius at Earth's distance,
+	// in km. Positive means the umbral cone reaches Earth (total eclipse
+	// geometry). Negative means the cone vertex falls short and the
+	// antumbra reaches Earth instead (annular eclipse geometry).
+	UmbralRadiusKm float64
+
+	// PenumbralRadiusKm is the Moon's penumbral cone radius at Earth's
+	// distance, in km.
+	PenumbralRadiusKm float64
+}
+
+// ClassifySolarEclipse determines the type of solar eclipse at the given TDB
+// Julian date from a geocentric perspective. The caller is responsible for
+// providing a time near new moon (Sun-Moon conjunction).
+//
+// The algorithm is the inverse of the lunar eclipse shadow cone geometry:
+// instead of Earth's shadow on the Moon, it computes the Moon's shadow cones
+// (umbral and penumbral) and checks whether they intersect Earth's disk at the
+// given time. This correctly handles the total vs annular distinction, which
+// depends on whether the Moon's umbral cone vertex extends past Earth's surface
+// (total) or falls short (annular, producing an antumbra).
+func ClassifySolarEclipse(eph *spk.SPK, tdbJD float64) SolarEclipse {
+	sunPos := eph.GeocentricPosition(spk.Sun, tdbJD)
+	moonPos := eph.GeocentricPosition(spk.Moon, tdbJD)
+
+	// Shadow axis direction: from Sun through Moon (toward Earth).
+	shadowDir := [3]float64{
+		moonPos[0] - sunPos[0],
+		moonPos[1] - sunPos[1],
+		moonPos[2] - sunPos[2],
+	}
+	dSM := vecLen(shadowDir) // Sun-Moon distance
+	shadowDir[0] /= dSM
+	shadowDir[1] /= dSM
+	shadowDir[2] /= dSM
+
+	// Distance from Moon to Earth (origin) along the shadow axis.
+	// Vector from Moon to Earth is -moonPos; project onto shadow direction.
+	dAlong := -(moonPos[0]*shadowDir[0] + moonPos[1]*shadowDir[1] + moonPos[2]*shadowDir[2])
+
+	result := SolarEclipse{T: tdbJD}
+
+	// If Earth is behind Moon relative to Sun (dAlong < 0), no solar eclipse.
+	if dAlong < 0 {
+		return result
+	}
+
+	// Perpendicular distance from Earth's center to the shadow axis.
+	// Nearest point on axis to origin: moonPos + dAlong * shadowDir.
+	nearX := moonPos[0] + dAlong*shadowDir[0]
+	nearY := moonPos[1] + dAlong*shadowDir[1]
+	nearZ := moonPos[2] + dAlong*shadowDir[2]
+	perp := math.Sqrt(nearX*nearX + nearY*nearY + nearZ*nearZ)
+
+	// Shadow cone radii at Earth's distance from Moon.
+	// Same cone geometry as lunar eclipses but with Moon as the caster:
+	//   umbral radius   = R_moon - d * (R_sun - R_moon) / D_sun_moon
+	//   penumbral radius = R_moon + d * (R_sun + R_moon) / D_sun_moon
+	rUmbra := moonRadiusKm - dAlong*(sunRadiusKm-moonRadiusKm)/dSM
+	rPenumbra := moonRadiusKm + dAlong*(sunRadiusKm+moonRadiusKm)/dSM
+
+	result.Gamma = perp / earthRadiusKm
+	result.UmbralRadiusKm = rUmbra
+	result.PenumbralRadiusKm = rPenumbra
+
+	// Classification: does Earth's disk (radius earthRadiusKm) intersect
+	// the shadow cones?
+	if perp >= rPenumbra+earthRadiusKm {
+		// Penumbra misses Earth entirely.
+		return result
+	}
+
+	// The central shadow radius is |rUmbra|: positive for umbra (total
+	// geometry), negative for antumbra (annular geometry).
+	centralRadius := math.Abs(rUmbra)
+	if perp < centralRadius+earthRadiusKm {
+		if rUmbra > 0 {
+			// Umbral cone reaches Earth → total eclipse somewhere on Earth.
+			result.Kind = SolarTotal
+		} else {
+			// Antumbra reaches Earth → annular eclipse somewhere on Earth.
+			result.Kind = SolarAnnular
+		}
+	} else {
+		// Only penumbra touches Earth.
+		result.Kind = SolarPartial
+	}
+
+	return result
+}
+
+// vecLen returns the Euclidean length of a 3-vector.
+func vecLen(v [3]float64) float64 {
+	return math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 }
 
 // eclipticElongation returns the ecliptic longitude difference (Moon - Sun)
