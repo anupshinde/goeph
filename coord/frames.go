@@ -200,6 +200,97 @@ func ITRFFrame() TimeBasedFrame {
 	}
 }
 
+// mul3x3 multiplies two 3×3 matrices: C = A * B.
+func mul3x3(A, B [3][3]float64) [3][3]float64 {
+	var C [3][3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			C[i][j] = A[i][0]*B[0][j] + A[i][1]*B[1][j] + A[i][2]*B[2][j]
+		}
+	}
+	return C
+}
+
+// transpose3x3 returns the transpose of a 3×3 matrix.
+func transpose3x3(M [3][3]float64) [3][3]float64 {
+	var T [3][3]float64
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			T[i][j] = M[j][i]
+		}
+	}
+	return T
+}
+
+// rx builds a rotation matrix around the X-axis by angle (radians).
+func rx(angle float64) [3][3]float64 {
+	s, c := math.Sincos(angle)
+	return [3][3]float64{
+		{1, 0, 0},
+		{0, c, s},
+		{0, -s, c},
+	}
+}
+
+// MeanEclipticOfDateFrame returns a TimeBasedFrame for the mean ecliptic and
+// equinox of date. The transformation chain is:
+//
+//	ICRF → frame bias (ICRS→J2000) → precession (J2000→mean equator of date)
+//	    → rotate by mean obliquity → mean ecliptic of date
+//
+// The jd argument to MatrixAt is TT Julian date.
+func MeanEclipticOfDateFrame() TimeBasedFrame {
+	return TimeBasedFrame{
+		Name: "MeanEclipticOfDate",
+		MatrixAt: func(jdTT float64) [3][3]float64 {
+			T := (jdTT - j2000JD) / 36525.0
+
+			// Precession: J2000 → mean equator of date.
+			P := transpose3x3(precessionMatrixInverse(T))
+
+			// Frame bias: ICRS → J2000.
+			PB := mul3x3(P, ICRSToJ2000Matrix)
+
+			// Rotate by mean obliquity into ecliptic plane.
+			epsM := meanObliquity(T)
+			return mul3x3(rx(epsM), PB)
+		},
+	}
+}
+
+// TrueEclipticOfDateFrame returns a TimeBasedFrame for the true ecliptic and
+// equinox of date. The transformation chain is:
+//
+//	ICRF → frame bias (ICRS→J2000) → precession (J2000→mean equator of date)
+//	    → nutation (mean→true equator of date)
+//	    → rotate by true obliquity → true ecliptic of date
+//
+// The jd argument to MatrixAt is TT Julian date.
+func TrueEclipticOfDateFrame() TimeBasedFrame {
+	return TimeBasedFrame{
+		Name: "TrueEclipticOfDate",
+		MatrixAt: func(jdTT float64) [3][3]float64 {
+			T := (jdTT - j2000JD) / 36525.0
+
+			// Precession: J2000 → mean equator of date.
+			P := transpose3x3(precessionMatrixInverse(T))
+
+			// Frame bias: ICRS → J2000.
+			PB := mul3x3(P, ICRSToJ2000Matrix)
+
+			// Nutation: mean → true equator of date.
+			dpsiRad, depsRad := nutationAngles(T)
+			epsM := meanObliquity(T)
+			N := transpose3x3(nutationMatrixTranspose(dpsiRad, depsRad, epsM))
+			NPB := mul3x3(N, PB)
+
+			// Rotate by true obliquity into ecliptic plane.
+			epsT := epsM + depsRad
+			return mul3x3(rx(epsT), NPB)
+		},
+	}
+}
+
 // ICRFToGalactic converts an ICRF Cartesian vector to Galactic latitude and
 // longitude in degrees. Longitude is in [0, 360).
 func ICRFToGalactic(x, y, z float64) (latDeg, lonDeg float64) {

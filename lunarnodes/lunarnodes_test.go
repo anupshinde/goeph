@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/anupshinde/goeph/coord"
 	"github.com/anupshinde/goeph/spk"
 )
 
@@ -398,6 +399,89 @@ func TestTrueNode_ValidationAgainstMean_FullRange(t *testing.T) {
 	// True node must show real oscillation (measured max 3.86°)
 	if s.maxAbsDiff < 1.0 {
 		t.Errorf("max |true-mean| = %.4f°, expected > 1.0° (oscillation too small)", s.maxAbsDiff)
+	}
+}
+
+func TestMeanLunarNodeICRF_ConsistentWithMeanLunarNodes(t *testing.T) {
+	// MeanLunarNodeICRF converted to J2000 ecliptic longitude should match
+	// MeanLunarNodes exactly.
+	dates := []float64{2415020.5, 2433282.5, 2451545.0, 2458849.5, 2469807.5}
+	for _, jd := range dates {
+		expectedN, expectedS := MeanLunarNodes(jd)
+		northICRF, southICRF := MeanLunarNodeICRF(jd)
+
+		_, gotN := coord.ICRFToEcliptic(northICRF[0], northICRF[1], northICRF[2])
+		_, gotS := coord.ICRFToEcliptic(southICRF[0], southICRF[1], southICRF[2])
+
+		if math.Abs(gotN-expectedN) > 1e-10 {
+			t.Errorf("jd=%.1f: north lon mismatch: ICRF→ecl=%.10f° vs MeanLunarNodes=%.10f°",
+				jd, gotN, expectedN)
+		}
+		if math.Abs(gotS-expectedS) > 1e-10 {
+			t.Errorf("jd=%.1f: south lon mismatch: ICRF→ecl=%.10f° vs MeanLunarNodes=%.10f°",
+				jd, gotS, expectedS)
+		}
+	}
+}
+
+func TestMeanLunarNodeICRF_UnitVector(t *testing.T) {
+	north, south := MeanLunarNodeICRF(2451545.0)
+	for _, v := range [][3]float64{north, south} {
+		mag := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+		if math.Abs(mag-1.0) > 1e-15 {
+			t.Errorf("not unit vector: magnitude=%.16f", mag)
+		}
+	}
+}
+
+func TestMeanLunarNodeICRF_Antipodal(t *testing.T) {
+	north, south := MeanLunarNodeICRF(2458849.5)
+	for i := 0; i < 3; i++ {
+		if math.Abs(north[i]+south[i]) > 1e-15 {
+			t.Errorf("north[%d]+south[%d] = %e, expected 0", i, i, north[i]+south[i])
+		}
+	}
+}
+
+func TestTrueNodeICRF_ConsistentWithTrueNode(t *testing.T) {
+	eph := loadEphemeris(t)
+	dates := []float64{2451545.0, 2455000.0, 2460000.0}
+	for _, jd := range dates {
+		expectedN, expectedS := TrueNode(eph, jd)
+		northICRF, southICRF := TrueNodeICRF(eph, jd)
+
+		_, gotN := coord.ICRFToEcliptic(northICRF[0], northICRF[1], northICRF[2])
+		_, gotS := coord.ICRFToEcliptic(southICRF[0], southICRF[1], southICRF[2])
+
+		if math.Abs(gotN-expectedN) > 1e-10 {
+			t.Errorf("jd=%.1f: north lon mismatch: ICRF→ecl=%.10f° vs TrueNode=%.10f°",
+				jd, gotN, expectedN)
+		}
+		if math.Abs(gotS-expectedS) > 1e-10 {
+			t.Errorf("jd=%.1f: south lon mismatch: ICRF→ecl=%.10f° vs TrueNode=%.10f°",
+				jd, gotS, expectedS)
+		}
+	}
+}
+
+func TestTrueNodeICRF_UnitVector(t *testing.T) {
+	eph := loadEphemeris(t)
+	north, south := TrueNodeICRF(eph, 2451545.0)
+	for _, v := range [][3]float64{north, south} {
+		mag := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+		if math.Abs(mag-1.0) > 1e-15 {
+			t.Errorf("not unit vector: magnitude=%.16f", mag)
+		}
+	}
+}
+
+func TestTrueNodeICRF_Antipodal(t *testing.T) {
+	eph := loadEphemeris(t)
+	north, south := TrueNodeICRF(eph, 2458849.5)
+	for i := 0; i < 3; i++ {
+		if math.Abs(north[i]+south[i]) > 1e-15 {
+			t.Errorf("north[%d]+south[%d] = %e, expected 0", i, i, north[i]+south[i])
+		}
 	}
 }
 
