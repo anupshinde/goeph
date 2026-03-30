@@ -61,8 +61,8 @@ def main():
         for vec in TEST_VECTORS:
             pos_au = np.array(vec) / 149597870.7  # km to AU
 
-            # Build a mock position and use Skyfield's ecliptic_latlon()
-            # ecliptic_latlon() without epoch= uses ecliptic of date
+            # Build a mock position and use Skyfield's ecliptic_latlon(epoch=t)
+            # to get true ecliptic of date coordinates.
             from skyfield.positionlib import ICRF
             position = ICRF(position_au=pos_au, t=t, center=399)
 

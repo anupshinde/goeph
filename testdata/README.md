@@ -7,9 +7,10 @@ All computational correctness in goeph is validated against [Skyfield](https://g
 ```bash
 cd testdata
 /opt/anaconda3/bin/python generate_golden.py
+/opt/anaconda3/bin/python generate_ecliptic_of_date.py
 ```
 
-Requires Python 3 with `skyfield` installed. The script loads `../data/de440s.bsp` and writes all `golden_*.json` files. These are checked into git so CI runs without Python or Skyfield.
+Requires Python 3 with `skyfield` and `numpy` installed. `generate_golden.py` loads `../data/de440s.bsp` and writes most `golden_*.json` files. `generate_ecliptic_of_date.py` generates `golden_ecliptic_of_date.json` (8 ICRF test vectors × 9 TT dates spanning 1900–2100, validated against Skyfield's `ecliptic_latlon(epoch=t)`). All golden files are checked into git so CI runs without Python or Skyfield.
 
 ## Sampling strategy
 

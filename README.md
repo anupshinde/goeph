@@ -50,7 +50,7 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Unit types** — `Angle` (degrees, hours, radians, DMS, HMS) and `Distance` (km, AU, meters, light-seconds)
 - **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic (J2000), mean/true ecliptic of date, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
 - **Geometric computations** — line-sphere intersection for shadow/limb checks
-- **Computes lunar node longitudes** — true node from ephemeris state vectors (r x v), mean node via Meeus formula
+- **Computes lunar node longitudes** — true node from ephemeris state vectors (r x v), mean node via Meeus formula; ICRF direction vectors for frame-agnostic usage
 - **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion and rise/culmination/set event finding
 - **Event search** — generic discrete event finding (bisection) and extrema finding (golden section) for time-series data
 - **Almanac** — sunrise/sunset, twilight levels, moon phases, seasons, body risings/settings, meridian transits, oppositions/conjunctions
