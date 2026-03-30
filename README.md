@@ -158,7 +158,7 @@ See also [`validation/generate_data_go/`](validation/generate_data_go/) for a co
 | `eclipse` | `goeph/eclipse` | Lunar and solar eclipse detection: type classification, magnitudes, shadow cone geometry |
 | `projection` | `goeph/projection` | Stereographic projection of sky positions onto a 2D plane for star charts |
 | `constellation` | `goeph/constellation` | IAU constellation identification from RA/Dec (88 constellations, grid-based binary search) |
-| `lunarnodes` | `goeph/lunarnodes` | True lunar node from ephemeris state vectors (`TrueNode`), mean node via Meeus polynomial (`MeanLunarNodes`) |
+| `lunarnodes` | `goeph/lunarnodes` | True lunar node from ephemeris state vectors (`TrueNode`), mean node via Meeus polynomial (`MeanLunarNodes`), ICRF direction vectors (`TrueNodeICRF`, `MeanLunarNodeICRF`) |
 
 ---
 

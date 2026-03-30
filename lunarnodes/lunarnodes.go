@@ -7,7 +7,10 @@ import (
 	"github.com/anupshinde/goeph/spk"
 )
 
-const j2000JD = 2451545.0
+const (
+	j2000JD = 2451545.0
+	deg2rad = math.Pi / 180.0
+)
 
 // J2000 mean obliquity ecliptic pole in ICRF: (0, -sin(ε), cos(ε))
 const (
@@ -51,6 +54,39 @@ func TrueNode(eph *spk.SPK, tdbJD float64) (northLon, southLon float64) {
 	// Convert node direction to ecliptic longitude
 	_, northLon = coord.ICRFToEcliptic(n[0], n[1], n[2])
 	southLon = math.Mod(northLon+180.0, 360.0)
+	return
+}
+
+// MeanLunarNodeICRF returns unit ICRF direction vectors for the mean North
+// and South lunar nodes at the given TDB Julian date. Uses the same Meeus
+// formula as MeanLunarNodes, converted from J2000 ecliptic longitude to ICRF.
+func MeanLunarNodeICRF(tdbJD float64) (north, south [3]float64) {
+	northLon, _ := MeanLunarNodes(tdbJD)
+	lonRad := northLon * deg2rad
+
+	// Unit vector in J2000 ecliptic: (cos λ, sin λ, 0)
+	ex, ey := math.Cos(lonRad), math.Sin(lonRad)
+
+	// Ecliptic → ICRF: rotate around X by -ε (inverse of ICRF→ecliptic Rx(+ε))
+	north = [3]float64{ex, eclipticPoleCosE * ey, eclipticPoleSinE * ey}
+	south = [3]float64{-north[0], -north[1], -north[2]}
+	return
+}
+
+// TrueNodeICRF returns unit ICRF direction vectors for the true (instantaneous)
+// North and South lunar nodes at the given TDB Julian date, computed from the
+// Moon's geocentric state vectors via the loaded SPK ephemeris.
+func TrueNodeICRF(eph *spk.SPK, tdbJD float64) (north, south [3]float64) {
+	r := eph.GeocentricPosition(spk.Moon, tdbJD)
+	v := eph.GeocentricVelocity(spk.Moon, tdbJD)
+
+	h := cross3(r, v)
+	hu := unit3(h)
+
+	k := [3]float64{0, -eclipticPoleSinE, eclipticPoleCosE}
+	n := cross3(k, hu)
+	north = unit3(n)
+	south = [3]float64{-north[0], -north[1], -north[2]}
 	return
 }
 
