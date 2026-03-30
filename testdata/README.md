@@ -53,6 +53,7 @@ All tolerances are measured max error vs Skyfield across the full date range.
 | `golden_locations.json` | Geodetic to ecliptic | 0.025 | ~0.022 | degrees | Light-time correction in Skyfield's observe() for surface locations |
 | `golden_altaz.json` | Altitude | 0.005 | ~0.0005 | degrees | GMST formula difference (IAU 1982 vs IERS 2000) |
 | `golden_altaz.json` | Azimuth | 0.02 | ~0.010 | degrees | GMST formula + minor near-horizon geometry effects |
+| `golden_ecliptic_of_date.json` | True ecliptic of date lat/lon | 0.001 | ~0.00002 | degrees | ICRF vectors → true ecliptic of date; sub-arcsecond vs Skyfield |
 
 ### Angular quantities
 

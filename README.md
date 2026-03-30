@@ -48,7 +48,7 @@ This project was [coded by AI](#ai-disclosure) and validated against Skyfield us
 - **Visibility checks** — is_sunlit, is_behind_earth (shadow/limb geometry)
 - **Atmospheric refraction** — Bennett's formula for altitude correction
 - **Unit types** — `Angle` (degrees, hours, radians, DMS, HMS) and `Distance` (km, AU, meters, light-seconds)
-- **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
+- **Frame rotations** — Galactic (IAU 1958), B1950 (FK4), Ecliptic (J2000), mean/true ecliptic of date, ITRF, ICRS-to-J2000 bias; generic `InertialFrame` and `TimeBasedFrame` types
 - **Geometric computations** — line-sphere intersection for shadow/limb checks
 - **Computes lunar node longitudes** — true node from ephemeris state vectors (r x v), mean node via Meeus formula
 - **Propagates satellites** via SGP4 (wraps go-satellite) with TEME→ICRF conversion and rise/culmination/set event finding
@@ -144,7 +144,7 @@ See also [`validation/generate_data_go/`](validation/generate_data_go/) for a co
 | Package | Import | What it does |
 |---------|--------|-------------|
 | `spk` | `goeph/spk` | SPK/DAF ephemeris file parser (Type 2 + 3), Chebyshev evaluation, positions (geometric, astrometric, apparent), velocity, arbitrary observer |
-| `coord` | `goeph/coord` | ICRF↔ecliptic, RA/Dec, geodetic↔ICRF↔ITRF, galactic, altaz, hour angle/dec, TEME↔ICRF, GMST/GAST/ERA, nutation, precession, aberration, deflection, angles, refraction, visibility, generic frame types, obliquity/nutation helpers (`MeanObliquityDeg`, `NutationDeg`, `TrueObliquityDeg`) |
+| `coord` | `goeph/coord` | ICRF↔ecliptic (J2000 + of-date), RA/Dec, geodetic↔ICRF↔ITRF, galactic, altaz, hour angle/dec, TEME↔ICRF, GMST/GAST/ERA, nutation, precession, aberration, deflection, angles, refraction, visibility, generic frame types, ecliptic-of-date frames, obliquity/nutation helpers (`MeanObliquityDeg`, `NutationDeg`, `TrueObliquityDeg`) |
 | `timescale` | `goeph/timescale` | UTC→TT→UT1 conversions, leap second table, delta-T cubic spline (1800-2200), TDB-TT |
 | `elements` | `goeph/elements` | Osculating Keplerian orbital elements from state vectors |
 | `magnitude` | `goeph/magnitude` | Planetary visual magnitudes (Mallama & Hilton 2018 phase curves) |

@@ -7,6 +7,16 @@ import (
 	"testing"
 )
 
+// goldenEclipticOfDate matches testdata/golden_ecliptic_of_date.json.
+type goldenEclipticOfDate struct {
+	Tests []struct {
+		TTJD      float64    `json:"tt_jd"`
+		ICRFKM    [3]float64 `json:"icrf_km"`
+		EclLatDeg float64    `json:"ecl_lat_deg"`
+		EclLonDeg float64    `json:"ecl_lon_deg"`
+	} `json:"tests"`
+}
+
 // goldenSidereal matches testdata/golden_sidereal.json.
 type goldenSidereal struct {
 	Tests []struct {
@@ -863,6 +873,138 @@ func TestTimeBasedFrame_ITRF_PreservesMagnitude(t *testing.T) {
 	magOut := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
 	if math.Abs(magOut-magIn) > 1e-8 {
 		t.Errorf("ITRF magnitude changed: %.10f → %.10f", magIn, magOut)
+	}
+}
+
+func TestTrueEclipticOfDateFrame_Golden(t *testing.T) {
+	// Validate TrueEclipticOfDateFrame against Skyfield's ecliptic_latlon(epoch=t).
+	// Use full nutation for best accuracy against Skyfield.
+	original := GetNutationPrecision()
+	defer SetNutationPrecision(original)
+	SetNutationPrecision(NutationFull)
+
+	var golden goldenEclipticOfDate
+	loadJSON(t, "../testdata/golden_ecliptic_of_date.json", &golden)
+
+	frame := TrueEclipticOfDateFrame()
+
+	var maxLatErr, maxLonErr float64
+	for i, tc := range golden.Tests {
+		lat, lon := frame.LatLon(tc.ICRFKM, tc.TTJD)
+
+		latErr := math.Abs(lat - tc.EclLatDeg)
+		lonErr := math.Abs(lon - tc.EclLonDeg)
+		// Handle 360° wraparound
+		if lonErr > 180 {
+			lonErr = 360 - lonErr
+		}
+
+		if latErr > maxLatErr {
+			maxLatErr = latErr
+		}
+		if lonErr > maxLonErr {
+			maxLonErr = lonErr
+		}
+
+		// Tolerance: 0.001° (~3.6 arcsec) — accounts for minor differences
+		// in precession/nutation model details between goeph and Skyfield.
+		if latErr > 0.001 || lonErr > 0.001 {
+			t.Errorf("test %d (JD=%.1f): lat err=%.6f° lon err=%.6f°",
+				i, tc.TTJD, latErr, lonErr)
+		}
+	}
+	t.Logf("max errors: lat=%.6f° lon=%.6f° (%d tests)", maxLatErr, maxLonErr, len(golden.Tests))
+}
+
+func TestMeanEclipticOfDateFrame_AtJ2000(t *testing.T) {
+	// At J2000.0, mean ecliptic of date should closely match the static
+	// J2000 Ecliptic frame (the only difference is the ICRS→J2000 frame
+	// bias, which is ~17 mas).
+	meanEcl := MeanEclipticOfDateFrame()
+	pos := [3]float64{1e8, -5e7, 2e7}
+
+	lat1, lon1 := Ecliptic.LatLon(pos)
+	lat2, lon2 := meanEcl.LatLon(pos, j2000JD)
+
+	// Frame bias is ~17 mas ≈ 5e-6 degrees; allow 1e-4° for safety.
+	if math.Abs(lat1-lat2) > 1e-4 || math.Abs(lon1-lon2) > 1e-4 {
+		t.Errorf("mean ecliptic at J2000 vs static: Δlat=%.6f° Δlon=%.6f°",
+			math.Abs(lat1-lat2), math.Abs(lon1-lon2))
+	}
+}
+
+func TestTrueEclipticOfDateFrame_AtJ2000(t *testing.T) {
+	// At J2000.0, true ecliptic should also be close to the static Ecliptic
+	// (nutation is small but nonzero — up to ~9 arcsec ≈ 0.0025°).
+	trueEcl := TrueEclipticOfDateFrame()
+	pos := [3]float64{1e8, -5e7, 2e7}
+
+	lat1, lon1 := Ecliptic.LatLon(pos)
+	lat2, lon2 := trueEcl.LatLon(pos, j2000JD)
+
+	if math.Abs(lat1-lat2) > 0.005 || math.Abs(lon1-lon2) > 0.005 {
+		t.Errorf("true ecliptic at J2000 vs static: Δlat=%.6f° Δlon=%.6f°",
+			math.Abs(lat1-lat2), math.Abs(lon1-lon2))
+	}
+}
+
+func TestEclipticOfDateFrame_PrecessionGrows(t *testing.T) {
+	// Ecliptic precession is ~50 arcsec/year ≈ 0.014°/year.
+	// Over 20 years, longitude should shift ~0.28°.
+	meanEcl := MeanEclipticOfDateFrame()
+	pos := [3]float64{1e8, 0, 0} // on the X-axis (lon≈0 in J2000 ecliptic)
+
+	_, lon0 := meanEcl.LatLon(pos, j2000JD)
+	_, lon20 := meanEcl.LatLon(pos, j2000JD+365.25*20)
+
+	shift := lon20 - lon0
+	// Expect ~0.28° shift; allow 0.1–0.5° range.
+	if shift < 0.1 || shift > 0.5 {
+		t.Errorf("20-year longitude precession shift: %.4f°, expected ~0.28°", shift)
+	}
+}
+
+func TestMeanVsTrueEclipticOfDate_Differ(t *testing.T) {
+	// Mean and true should differ due to nutation.
+	meanEcl := MeanEclipticOfDateFrame()
+	trueEcl := TrueEclipticOfDateFrame()
+	pos := [3]float64{1e8, -5e7, 2e7}
+	jd := j2000JD + 365.25*10 // 10 years after J2000
+
+	_, lonMean := meanEcl.LatLon(pos, jd)
+	_, lonTrue := trueEcl.LatLon(pos, jd)
+
+	diff := math.Abs(lonMean - lonTrue)
+	// Nutation in longitude is up to ~17 arcsec ≈ 0.005°; should be nonzero.
+	if diff < 1e-6 {
+		t.Error("mean and true ecliptic longitudes are identical — nutation not applied")
+	}
+	// But should not be huge (< 0.01°).
+	if diff > 0.01 {
+		t.Errorf("mean vs true ecliptic longitude difference too large: %.6f°", diff)
+	}
+}
+
+func TestEclipticOfDateFrame_PreservesMagnitude(t *testing.T) {
+	meanEcl := MeanEclipticOfDateFrame()
+	trueEcl := TrueEclipticOfDateFrame()
+	pos := [3]float64{6778.0, 1234.0, -3456.0}
+	jd := j2000JD + 365.25*10
+
+	magIn := math.Sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2])
+
+	for _, tc := range []struct {
+		name  string
+		frame TimeBasedFrame
+	}{
+		{"MeanEclipticOfDate", meanEcl},
+		{"TrueEclipticOfDate", trueEcl},
+	} {
+		v := tc.frame.XYZ(pos, jd)
+		magOut := math.Sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+		if math.Abs(magOut-magIn) > 1e-8 {
+			t.Errorf("%s magnitude changed: %.10f → %.10f", tc.name, magIn, magOut)
+		}
 	}
 }
 
