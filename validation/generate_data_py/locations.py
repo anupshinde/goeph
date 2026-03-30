@@ -1,11 +1,14 @@
 import os
+import sys
 from skyfield.api import load
 from skyfield.api import N, W, wgs84
 
-# Uses de440s.bsp from the repo's data/ folder,
-# or download from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/
+# Defaults to de440s.bsp from the repo's data/ folder,
+# or pass a custom path as the first CLI argument.
+# Download from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/
 bsp_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
-ephem = load(os.path.join(bsp_path, 'de440s.bsp'))
+bsp_file = sys.argv[1] if len(sys.argv) > 1 else os.path.join(bsp_path, 'de440s.bsp')
+ephem = load(bsp_file)
 
 earth = ephem['earth']
 
