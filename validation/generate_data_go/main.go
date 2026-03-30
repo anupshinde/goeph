@@ -17,8 +17,10 @@ func main() {
 	if len(os.Args) > 1 {
 		bspPath = os.Args[1]
 	}
-	fmt.Println("Loading ephemeris:", bspPath)
-	ephemeris, err := spk.Open(bspPath)
+	chiron1 := filepath.Join("..", "..", "data", "chiron_1600_2100.bsp")
+	chiron2 := filepath.Join("..", "..", "data", "chiron_2100_2500.bsp")
+	fmt.Println("Loading ephemeris:", bspPath, chiron1, chiron2)
+	ephemeris, err := spk.OpenMultiple(bspPath, chiron1, chiron2)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading ephemeris: %v\n", err)
 		os.Exit(1)

@@ -34,34 +34,78 @@ type chainLink struct {
 type segment struct {
 	target   int
 	center   int
-	dataType int     // SPK segment type (2 or 3)
+	dataType int     // SPK segment type (2, 3, or 21)
 	startSec float64 // segment start epoch (TDB seconds past J2000) from DAF summary
 	endSec   float64 // segment end epoch (TDB seconds past J2000) from DAF summary
-	init     float64 // initial epoch (TDB seconds past J2000) from segment metadata
-	intLen   float64 // interval length (seconds)
-	rsize    int     // record size (doubles per record)
-	n        int     // number of records
-	nCoeffs  int     // Chebyshev coefficients per component
-	data     []float64
+	// Type 2/3 fields
+	init    float64 // initial epoch (TDB seconds past J2000) from segment metadata
+	intLen  float64 // interval length (seconds)
+	rsize   int     // record size (doubles per record)
+	n       int     // number of records
+	nCoeffs int     // Chebyshev coefficients per component
+	// Type 21 fields
+	maxDim     int       // difference table size per component
+	dlSize     int       // difference line size: 4*maxDim + 11
+	epochTable []float64 // epoch for each record (seconds past J2000)
+	data       []float64
 }
 
 // Open reads and parses an SPK file. Type 2 and Type 3 segments are supported.
 func Open(filename string) (*SPK, error) {
+	return OpenMultiple(filename)
+}
+
+// OpenMultiple reads and parses one or more SPK files, merging all segments
+// into a single SPK. Segments from different files for the same body pair are
+// combined and sorted by epoch, enabling temporal stacking across files.
+func OpenMultiple(filenames ...string) (*SPK, error) {
+	if len(filenames) == 0 {
+		return nil, fmt.Errorf("spk: no files specified")
+	}
+
+	spk := &SPK{
+		segMap: make(map[[2]int][]*segment),
+		chains: make(map[int][]chainLink),
+	}
+
+	for _, filename := range filenames {
+		if err := spk.loadFile(filename); err != nil {
+			return nil, fmt.Errorf("loading %s: %w", filename, err)
+		}
+	}
+
+	// Sort segment slices by startSec for temporal stacking
+	for _, segs := range spk.segMap {
+		sort.Slice(segs, func(i, j int) bool {
+			return segs[i].startSec < segs[j].startSec
+		})
+	}
+
+	// Build and validate chains from every target body to SSB
+	if err := spk.buildChains(); err != nil {
+		return nil, err
+	}
+
+	return spk, nil
+}
+
+// loadFile parses a single SPK file and appends its segments to the SPK.
+func (s *SPK) loadFile(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer f.Close()
 
 	// Read file record (record 1)
 	fileRec := make([]byte, recordLen)
 	if _, err := f.Read(fileRec); err != nil {
-		return nil, fmt.Errorf("reading file record: %w", err)
+		return fmt.Errorf("reading file record: %w", err)
 	}
 
 	locidw := string(fileRec[0:8])
 	if locidw != "DAF/SPK " {
-		return nil, fmt.Errorf("not an SPK file: got %q", locidw)
+		return fmt.Errorf("not an SPK file: got %q", locidw)
 	}
 
 	nd := int(binary.LittleEndian.Uint32(fileRec[8:12]))
@@ -72,21 +116,16 @@ func Open(filename string) (*SPK, error) {
 	summaryDoubles := nd + (ni+1)/2
 	summaryBytes := summaryDoubles * 8
 
-	spk := &SPK{
-		segMap: make(map[[2]int][]*segment),
-		chains: make(map[int][]chainLink),
-	}
-
 	// Walk summary record chain starting at FWARD
 	recNum := fward
 	for recNum != 0 {
 		offset := int64(recNum-1) * recordLen
 		if _, err := f.Seek(offset, 0); err != nil {
-			return nil, err
+			return err
 		}
 		rec := make([]byte, recordLen)
 		if _, err := f.Read(rec); err != nil {
-			return nil, err
+			return err
 		}
 
 		nextRec := math.Float64frombits(binary.LittleEndian.Uint64(rec[0:8]))
@@ -109,19 +148,19 @@ func Open(filename string) (*SPK, error) {
 			startI := int(int32(binary.LittleEndian.Uint32(summary[intOff+16:])))
 			endI := int(int32(binary.LittleEndian.Uint32(summary[intOff+20:])))
 
-			if dataType != 2 && dataType != 3 {
-				return nil, fmt.Errorf("unsupported SPK type %d (target=%d, center=%d)", dataType, target, center)
+			if dataType != 2 && dataType != 3 && dataType != 21 {
+				return fmt.Errorf("unsupported SPK type %d (target=%d, center=%d)", dataType, target, center)
 			}
 
 			// Read segment data from file
 			nWords := endI - startI + 1
 			dataOffset := int64(startI-1) * 8
 			if _, err := f.Seek(dataOffset, 0); err != nil {
-				return nil, err
+				return err
 			}
 			rawData := make([]byte, nWords*8)
 			if _, err := f.Read(rawData); err != nil {
-				return nil, err
+				return err
 			}
 
 			data := make([]float64, nWords)
@@ -129,31 +168,36 @@ func Open(filename string) (*SPK, error) {
 				data[j] = math.Float64frombits(binary.LittleEndian.Uint64(rawData[j*8 : j*8+8]))
 			}
 
-			// Metadata is in the last 4 words
-			seg := segment{
-				target:   target,
-				center:   center,
-				dataType: dataType,
-				startSec: startSec,
-				endSec:   endSec,
-				init:     data[nWords-4],
-				intLen:   data[nWords-3],
-				rsize:    int(data[nWords-2]),
-				n:        int(data[nWords-1]),
-				data:     data[:nWords-4],
-			}
-
-			// Type 2: position only → 3 components per record
-			// Type 3: position + velocity → 6 components per record
-			if dataType == 2 {
-				seg.nCoeffs = (seg.rsize - 2) / 3
+			var seg segment
+			if dataType == 21 {
+				seg = parseType21Segment(target, center, startSec, endSec, data, nWords)
 			} else {
-				seg.nCoeffs = (seg.rsize - 2) / 6
+				// Metadata is in the last 4 words
+				seg = segment{
+					target:   target,
+					center:   center,
+					dataType: dataType,
+					startSec: startSec,
+					endSec:   endSec,
+					init:     data[nWords-4],
+					intLen:   data[nWords-3],
+					rsize:    int(data[nWords-2]),
+					n:        int(data[nWords-1]),
+					data:     data[:nWords-4],
+				}
+
+				// Type 2: position only → 3 components per record
+				// Type 3: position + velocity → 6 components per record
+				if dataType == 2 {
+					seg.nCoeffs = (seg.rsize - 2) / 3
+				} else {
+					seg.nCoeffs = (seg.rsize - 2) / 6
+				}
 			}
 
-			spk.segments = append(spk.segments, seg)
+			s.segments = append(s.segments, seg)
 			key := [2]int{target, center}
-			spk.segMap[key] = append(spk.segMap[key], &spk.segments[len(spk.segments)-1])
+			s.segMap[key] = append(s.segMap[key], &s.segments[len(s.segments)-1])
 
 			pos += summaryBytes
 		}
@@ -164,19 +208,7 @@ func Open(filename string) (*SPK, error) {
 		recNum = int(nextRec)
 	}
 
-	// Sort segment slices by startSec for temporal stacking
-	for _, segs := range spk.segMap {
-		sort.Slice(segs, func(i, j int) bool {
-			return segs[i].startSec < segs[j].startSec
-		})
-	}
-
-	// Build and validate chains from every target body to SSB
-	if err := spk.buildChains(); err != nil {
-		return nil, err
-	}
-
-	return spk, nil
+	return nil
 }
 
 // segPosition evaluates a single segment at the given TDB Julian date.
@@ -194,6 +226,10 @@ func (s *SPK) segPosition(target, center int, tdbJD float64) [3]float64 {
 
 	// Find the segment covering this epoch
 	seg := findSegment(segs, seconds)
+
+	if seg.dataType == 21 {
+		return s.type21Position(seg, seconds)
+	}
 
 	// Find record index
 	idx := int((seconds - seg.init) / seg.intLen)
@@ -502,6 +538,10 @@ func (s *SPK) segVelocity(target, center int, tdbJD float64) [3]float64 {
 
 	seconds := (tdbJD - j2000JD) * secPerDay + tdbMinusTT(tdbJD)
 	seg := findSegment(segs, seconds)
+
+	if seg.dataType == 21 {
+		return s.type21Velocity(seg, seconds)
+	}
 
 	idx := int((seconds - seg.init) / seg.intLen)
 	if idx < 0 {
