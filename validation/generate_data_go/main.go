@@ -10,9 +10,13 @@ import (
 )
 
 func main() {
-	// Load ephemeris — uses de440s.bsp from the repo's data/ folder,
-	// or download from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/
+	// Load ephemeris — defaults to de440s.bsp from the repo's data/ folder,
+	// or pass a custom path as the first argument.
+	// Download from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/
 	bspPath := filepath.Join("..", "..", "data", "de440s.bsp")
+	if len(os.Args) > 1 {
+		bspPath = os.Args[1]
+	}
 	fmt.Println("Loading ephemeris:", bspPath)
 	ephemeris, err := spk.Open(bspPath)
 	if err != nil {

@@ -38,3 +38,6 @@ __pycache__/
 # Coverage
 *.out
 coverage.html
+
+# Large ephemeris files (only de440s.bsp is tracked)
+data/de440.bsp
