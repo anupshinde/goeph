@@ -572,6 +572,40 @@ func UTCToTT(jdUTC float64) float64 {
 	return jdUTC + (taiOffset+32.184)/SecPerDay
 }
 
+// TTToUTC converts a TT Julian Date to a UTC Julian Date.
+// Inverse of UTCToTT: UTC = TT - (TAI-UTC + 32.184s).
+//
+// The leap second table is keyed by UTC, which is not yet known when
+// converting from TT. A first lookup using the TT date gives an estimate
+// (TT and UTC differ by ~1 minute, far less than the spacing between
+// leap second steps); a second lookup with the resulting UTC date makes
+// the conversion exact even within a minute of a leap second boundary.
+func TTToUTC(jdTT float64) float64 {
+	offset := LeapSecondOffset(jdTT) + 32.184
+	jdUTC := jdTT - offset/SecPerDay
+	offset = LeapSecondOffset(jdUTC) + 32.184
+	return jdTT - offset/SecPerDay
+}
+
+// JDUTCToTime converts a UTC Julian Date to a time.Time in UTC.
+// Inverse of TimeToJDUTC.
+//
+// float64 Julian Dates near the current epoch have a resolution of
+// roughly 25 microseconds, so round-tripping through a JD preserves
+// sub-millisecond but not nanosecond precision.
+func JDUTCToTime(jdUTC float64) time.Time {
+	unixSec := (jdUTC - 2440587.5) * SecPerDay
+	sec := math.Floor(unixSec)
+	nsec := math.Round((unixSec - sec) * 1e9)
+	return time.Unix(int64(sec), int64(nsec)).UTC()
+}
+
+// TTToTime converts a TT Julian Date to a time.Time in UTC.
+// Composes TTToUTC and JDUTCToTime.
+func TTToTime(jdTT float64) time.Time {
+	return JDUTCToTime(TTToUTC(jdTT))
+}
+
 // TTToUT1 converts a TT Julian Date to UT1 Julian Date using the ΔT table.
 // UT1 = TT - ΔT
 func TTToUT1(jdTT float64) float64 {
