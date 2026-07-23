@@ -4128,4 +4128,3 @@ var planetaryOblCoeffs = [687][2]float64{
 	{0.0, -1.0},
 	{0.0, -1.0},
 }
-

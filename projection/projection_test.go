@@ -19,11 +19,11 @@ func TestProject_NorthPoleCenter(t *testing.T) {
 	p := NewProjector(0, 0, 1)
 
 	tests := []struct {
-		name       string
-		ra, dec    float64 // hours, degrees
-		wantX      float64
-		wantY      float64
-		tol        float64
+		name    string
+		ra, dec float64 // hours, degrees
+		wantX   float64
+		wantY   float64
+		tol     float64
 	}{
 		{"1° from pole", 0, 89, 0.0, -0.008727, 1e-5},
 		{"10° from pole RA=6h", 6, 80, -0.087489, 0.0, 1e-5},

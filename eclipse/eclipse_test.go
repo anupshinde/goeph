@@ -83,8 +83,8 @@ func TestFindLunarEclipses_TotalEclipse(t *testing.T) {
 func TestFindLunarEclipses_Decade(t *testing.T) {
 	// Over 10 years, there should be roughly 15-25 lunar eclipses.
 	// (Average ~2.4 per year.)
-	startJD := 2451545.0          // J2000
-	endJD := startJD + 10*365.25  // 10 years
+	startJD := 2451545.0         // J2000
+	endJD := startJD + 10*365.25 // 10 years
 
 	eclipses, err := FindLunarEclipses(testEph, startJD, endJD)
 	if err != nil {

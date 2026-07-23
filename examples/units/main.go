@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// Angle conversions
-	fmt.Println("=== Angle Conversions ===\n")
+	fmt.Println("=== Angle Conversions ===")
 
 	// Sirius: RA = 6h 45m 8.9s, Dec = -16° 42' 58"
 	ra := units.AngleFromHours(6.0 + 45.0/60.0 + 8.9/3600.0)
@@ -40,7 +40,7 @@ func main() {
 		full.Arcminutes(), full.Arcseconds())
 
 	// Distance conversions
-	fmt.Println("=== Distance Conversions ===\n")
+	fmt.Println("=== Distance Conversions ===")
 
 	// Earth-Sun distance
 	earthSun := units.DistanceFromAU(1.0)

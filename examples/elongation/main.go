@@ -2,7 +2,8 @@
 //
 // Elongation is the angular distance of the Moon from the Sun measured
 // along the ecliptic. It determines the Moon's phase:
-//   0° = New Moon, 90° = First Quarter, 180° = Full Moon, 270° = Last Quarter
+//
+//	0° = New Moon, 90° = First Quarter, 180° = Full Moon, 270° = Last Quarter
 package main
 
 import (

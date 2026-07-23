@@ -98,7 +98,7 @@ func TestICRSToJ2000Matrix_NonIdentity(t *testing.T) {
 func TestICRFToGalactic_GalacticCenter(t *testing.T) {
 	// Galactic center (Sgr A*): RA=17h45m40.0409s, Dec=-29°00'28.118"
 	// In ICRF unit vector form:
-	x, y, z := RADecToICRF(17.0+45.0/60.0+40.0409/3600.0, -(29.0+0.0/60.0+28.118/3600.0))
+	x, y, z := RADecToICRF(17.0+45.0/60.0+40.0409/3600.0, -(29.0 + 0.0/60.0 + 28.118/3600.0))
 
 	lat, lon := ICRFToGalactic(x, y, z)
 

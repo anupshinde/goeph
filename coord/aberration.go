@@ -21,13 +21,13 @@ func Aberration(position, velocity [3]float64, lightTime float64) [3]float64 {
 		return position
 	}
 
-	beta := vemag / cKmPerDay            // v/c ratio
-	dot := dot3(position, velocity)       // km * km/day
-	cosd := dot / (p1mag * vemag)         // cosine of angle between position and velocity
-	gammai := math.Sqrt(1.0 - beta*beta)  // inverse Lorentz factor (sqrt(1 - v²/c²))
-	p := beta * cosd                      // dimensionless
+	beta := vemag / cKmPerDay               // v/c ratio
+	dot := dot3(position, velocity)         // km * km/day
+	cosd := dot / (p1mag * vemag)           // cosine of angle between position and velocity
+	gammai := math.Sqrt(1.0 - beta*beta)    // inverse Lorentz factor (sqrt(1 - v²/c²))
+	p := beta * cosd                        // dimensionless
 	q := (1.0 + p/(1.0+gammai)) * lightTime // days
-	r := 1.0 + p                          // dimensionless
+	r := 1.0 + p                            // dimensionless
 
 	var result [3]float64
 	for i := 0; i < 3; i++ {

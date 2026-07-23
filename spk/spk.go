@@ -222,7 +222,7 @@ func (s *SPK) segPosition(target, center int, tdbJD float64) [3]float64 {
 		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
 	}
 
-	seconds := (tdbJD - j2000JD) * secPerDay + tdbMinusTT(tdbJD)
+	seconds := (tdbJD-j2000JD)*secPerDay + tdbMinusTT(tdbJD)
 
 	// Find the segment covering this epoch
 	seg := findSegment(segs, seconds)
@@ -536,7 +536,7 @@ func (s *SPK) segVelocity(target, center int, tdbJD float64) [3]float64 {
 		panic(fmt.Sprintf("spk: no segment for target=%d center=%d", target, center))
 	}
 
-	seconds := (tdbJD - j2000JD) * secPerDay + tdbMinusTT(tdbJD)
+	seconds := (tdbJD-j2000JD)*secPerDay + tdbMinusTT(tdbJD)
 	seg := findSegment(segs, seconds)
 
 	if seg.dataType == 21 {

@@ -47,7 +47,7 @@ func main() {
 	for _, p := range planets {
 		// Get positions
 		sunPos := eph.GeocentricPosition(spk.Sun, jdTT) // Earth→Sun
-		planetPos := eph.Observe(p.id, jdTT)             // Earth→Planet
+		planetPos := eph.Observe(p.id, jdTT)            // Earth→Planet
 
 		// Sun→Planet vector = Planet_from_Earth - Sun_from_Earth
 		sunToPlanet := [3]float64{

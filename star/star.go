@@ -67,7 +67,7 @@ func (s *Star) init() {
 	s.ready = true
 
 	ra := s.RAHours * 15.0 * math.Pi / 180.0 // radians
-	dec := s.DecDeg * math.Pi / 180.0         // radians
+	dec := s.DecDeg * math.Pi / 180.0        // radians
 
 	// Distance from parallax.
 	parallax := s.ParallaxMas
@@ -92,7 +92,7 @@ func (s *Star) init() {
 	k := 1.0 / (1.0 - s.RadialKmPerS/cKmPerS)
 
 	pmr := (s.RAMasPerYear / (parallax * 365.25)) * k  // AU/day
-	pmd := (s.DecMasPerYear / (parallax * 365.25)) * k  // AU/day
+	pmd := (s.DecMasPerYear / (parallax * 365.25)) * k // AU/day
 	rvl := (s.RadialKmPerS * 86400.0 / auKm) * k       // AU/day
 
 	s.velAU = [3]float64{
