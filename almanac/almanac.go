@@ -136,6 +136,51 @@ func bodyAltitude(eph *spk.SPK, body int, latDeg, lonDeg, tdbJD float64) float64
 	return alt
 }
 
+// earthEquatorialRadiusKm is used for the Moon's horizontal parallax.
+const earthEquatorialRadiusKm = 6378.14
+
+// moonRiseSetThreshold returns the standard rise/set altitude for the Moon's
+// geocentric position at the given distance (Meeus, Astronomical Algorithms
+// ch. 15): h0 = 0.7275·π − 34′, where π is the horizontal parallax.
+//
+// Altaz altitudes here are computed from the geocentric direction; for the
+// Moon the topocentric direction differs by up to the parallax (~57′ — far
+// larger than refraction, opposite sign). The 0.7275 factor folds the
+// parallax and the Moon's semidiameter (0.2725·π) into a threshold on the
+// geocentric altitude, so no explicit topocentric transform is needed. The
+// resulting threshold is slightly positive (~+5′ to +11′): the Moon's upper
+// limb reaches a ground observer's horizon while its geocentric altitude is
+// still above zero.
+func moonRiseSetThreshold(distKm float64) float64 {
+	parallaxDeg := math.Asin(earthEquatorialRadiusKm/distKm) * 180.0 / math.Pi
+	return 0.7275*parallaxDeg - 34.0/60.0
+}
+
+// MoonriseMoonset finds moonrise and moonset times for a ground observer in
+// the given TDB Julian date range.
+//
+// Unlike the generic Risings/Settings (which use the refraction-only −34′
+// horizon, adequate for distant bodies), this applies the Moon-specific
+// standard altitude h0 = 0.7275·π − 34′ accounting for the Moon's large
+// horizontal parallax and semidiameter.
+//
+// Returns events with NewValue=1 (moonrise) and NewValue=0 (moonset). Note
+// that because the Moon rises ~50 minutes later each day, a civil calendar
+// date can contain no moonrise or no moonset; callers mapping events onto
+// civil dates must handle absence.
+func MoonriseMoonset(eph *spk.SPK, latDeg, lonDeg, startJD, endJD float64) ([]search.DiscreteEvent, error) {
+	f := func(tdbJD float64) int {
+		pos := eph.Apparent(spk.Moon, tdbJD)
+		jdUT1 := timescale.TTToUT1(tdbJD)
+		alt, _, distKm := coord.Altaz(pos, latDeg, lonDeg, jdUT1)
+		if alt >= moonRiseSetThreshold(distKm) {
+			return 1
+		}
+		return 0
+	}
+	return search.FindDiscrete(startJD, endJD, 0.04, f, 0)
+}
+
 // Risings finds times when a body rises above the horizon for a ground observer
 // in the given TDB Julian date range.
 //
