@@ -34,12 +34,12 @@ func TestLeapSecondOffset(t *testing.T) {
 		jdUTC float64
 		want  float64
 	}{
-		{2441317.5, 10},  // 1972-01-01 exactly
-		{2441318.0, 10},  // just after
-		{2441499.5, 11},  // 1972-07-01
-		{2457754.5, 37},  // 2017-01-01 (latest)
-		{2460000.0, 37},  // future: should return latest
-		{2400000.0, 10},  // pre-1972: returns initial 10
+		{2441317.5, 10}, // 1972-01-01 exactly
+		{2441318.0, 10}, // just after
+		{2441499.5, 11}, // 1972-07-01
+		{2457754.5, 37}, // 2017-01-01 (latest)
+		{2460000.0, 37}, // future: should return latest
+		{2400000.0, 10}, // pre-1972: returns initial 10
 	}
 	for _, tc := range tests {
 		got := LeapSecondOffset(tc.jdUTC)
@@ -167,6 +167,76 @@ func TestUTCToTT_Golden(t *testing.T) {
 	}
 	if failures > 0 {
 		t.Errorf("%d UTCToTT failures out of %d tests", failures, len(golden.Tests))
+	}
+}
+
+func TestTTToUTC_Golden(t *testing.T) {
+	golden := loadGolden(t)
+
+	const tol = 1e-9
+	failures := 0
+	for i, tc := range golden.Tests {
+		got := TTToUTC(tc.TTJD)
+		diff := math.Abs(got - tc.UTCJD)
+		if diff > tol {
+			if failures < 10 {
+				t.Errorf("test %d: TT=%.10f got UTC=%.10f want=%.10f diff=%.2e days",
+					i, tc.TTJD, got, tc.UTCJD, diff)
+			}
+			failures++
+		}
+	}
+	if failures > 0 {
+		t.Errorf("%d TTToUTC failures out of %d tests", failures, len(golden.Tests))
+	}
+}
+
+func TestTTToUTC_RoundTrip(t *testing.T) {
+	// UTCToTT then TTToUTC must return the original UTC JD, including
+	// dates within a minute of a leap second step where the two-pass
+	// offset lookup in TTToUTC matters.
+	cases := []float64{
+		2451545.0,                  // J2000
+		2440587.5,                  // Unix epoch (pre-leap-second era)
+		2457754.5,                  // 2017-01-01 leap second step, exactly at boundary
+		2457754.5 - 30.0/SecPerDay, // 30 s before the step
+		2457754.5 + 30.0/SecPerDay, // 30 s after the step
+		2457754.5 - 65.0/SecPerDay, // just outside the TT-UTC offset window
+		2457754.5 + 65.0/SecPerDay,
+		2460000.5, // 2023, after last table entry
+	}
+	for _, jdUTC := range cases {
+		back := TTToUTC(UTCToTT(jdUTC))
+		if diff := math.Abs(back - jdUTC); diff > 1e-12 {
+			t.Errorf("round trip UTC=%.10f: got %.10f, diff %.2e days", jdUTC, back, diff)
+		}
+	}
+}
+
+func TestJDUTCToTime_RoundTrip(t *testing.T) {
+	// time.Time -> JD -> time.Time. float64 JD resolution near the
+	// current epoch is ~25 us, so require sub-millisecond agreement.
+	cases := []time.Time{
+		time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC),
+		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 7, 23, 6, 5, 43, 123456789, time.UTC),
+		time.Date(1962, 3, 15, 23, 59, 59, 900000000, time.UTC),
+	}
+	for _, want := range cases {
+		got := JDUTCToTime(TimeToJDUTC(want))
+		if d := got.Sub(want); d < -time.Millisecond || d > time.Millisecond {
+			t.Errorf("round trip %v: got %v (off by %v)", want, got, d)
+		}
+	}
+}
+
+func TestTTToTime(t *testing.T) {
+	// J2000: TT 2451545.0 = 2000-01-01 12:00:00 TT
+	// = 11:58:55.816 UTC (TT-UTC was 32 + 32.184 = 64.184 s).
+	got := TTToTime(2451545.0)
+	want := time.Date(2000, 1, 1, 11, 58, 55, 816000000, time.UTC)
+	if d := got.Sub(want); d < -time.Millisecond || d > time.Millisecond {
+		t.Errorf("TTToTime(J2000) = %v, want %v (off by %v)", got, want, d)
 	}
 }
 
