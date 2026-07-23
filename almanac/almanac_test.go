@@ -404,3 +404,120 @@ func TestTransits_Sun(t *testing.T) {
 		t.Errorf("got %d sun transits in 10 days, want ~10", len(events))
 	}
 }
+
+func TestMoonriseMoonset_EventStructure(t *testing.T) {
+	// Delhi, January 2024, 30 days. Rises and sets alternate; each occurs
+	// roughly once per lunar day (~24h50m), so ~29 of each in 30 days.
+	start := 2460310.5
+	end := start + 30
+	events, err := MoonriseMoonset(testEph, 28.6139, 77.2090, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rises, sets []float64
+	for i, e := range events {
+		if e.NewValue == 1 {
+			rises = append(rises, e.T)
+		} else {
+			sets = append(sets, e.T)
+		}
+		if i > 0 && events[i].NewValue == events[i-1].NewValue {
+			t.Errorf("events %d and %d have same NewValue %d — must alternate", i-1, i, e.NewValue)
+		}
+	}
+	if len(rises) < 27 || len(rises) > 31 {
+		t.Errorf("got %d moonrises in 30 days, want ~29", len(rises))
+	}
+	if len(sets) < 27 || len(sets) > 31 {
+		t.Errorf("got %d moonsets in 30 days, want ~29", len(sets))
+	}
+	// Successive moonrises are separated by the lunar day: ~24.2 h to ~25.5 h
+	// at this latitude.
+	for i := 1; i < len(rises); i++ {
+		gapH := (rises[i] - rises[i-1]) * 24
+		if gapH < 23.5 || gapH > 26.0 {
+			t.Errorf("moonrise gap %d: %.2f h outside lunar-day range", i, gapH)
+		}
+	}
+}
+
+func TestMoonriseMoonset_PhaseAlignment(t *testing.T) {
+	// External property anchors: on the day of new moon the Moon rises with
+	// the Sun; on full moon it rises at sunset. 2024-04-08 was a new moon
+	// (18:21 UTC); 2024-04-23 a full moon (23:49 UTC). Delhi coordinates.
+	lat, lon := 28.6139, 77.2090
+
+	check := func(desc string, dayStartJD float64, sunEventValue int, maxDiffMin float64) {
+		moonEvents, err := MoonriseMoonset(testEph, lat, lon, dayStartJD, dayStartJD+1.5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sunEvents, err := SunriseSunset(testEph, lat, lon, dayStartJD, dayStartJD+1.5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var moonRise, sunRef float64
+		for _, e := range moonEvents {
+			if e.NewValue == 1 && moonRise == 0 {
+				moonRise = e.T
+			}
+		}
+		for _, e := range sunEvents {
+			if e.NewValue == sunEventValue && sunRef == 0 {
+				sunRef = e.T
+			}
+		}
+		if moonRise == 0 || sunRef == 0 {
+			t.Fatalf("%s: missing events (moonrise=%.5f, sun=%.5f)", desc, moonRise, sunRef)
+		}
+		diffMin := math.Abs(moonRise-sunRef) * 24 * 60
+		t.Logf("%s: moonrise vs sun event differ by %.0f min", desc, diffMin)
+		if diffMin > maxDiffMin {
+			t.Errorf("%s: moonrise %.5f vs sun event %.5f differ by %.0f min (max %.0f)",
+				desc, moonRise, sunRef, diffMin, maxDiffMin)
+		}
+	}
+
+	// New moon 2024-04-08: first moonrise that morning is within ~45 min of
+	// sunrise (elongation is near 0 but not exactly 0 at rise time).
+	check("new moon rise≈sunrise", 2460408.5, 1, 45)
+	// Full moon 2024-04-23: moonrise within ~45 min of sunset.
+	check("full moon rise≈sunset", 2460423.5, 0, 45)
+}
+
+func TestMoonriseMoonset_ThresholdRange(t *testing.T) {
+	// h0 = 0.7275·π − 34′ for the Moon's distance range (356k-407k km):
+	// parallax 53.9′-61.5′ → h0 between roughly +5′ and +11′.
+	for _, distKm := range []float64{356500.0, 384400.0, 406700.0} {
+		h0 := moonRiseSetThreshold(distKm)
+		if h0 < 0.07 || h0 > 0.20 {
+			t.Errorf("moonRiseSetThreshold(%.0f km) = %.4f°, outside expected +0.07..+0.20°", distKm, h0)
+		}
+	}
+}
+
+func TestMoonriseMoonset_HighLatitudeAbsence(t *testing.T) {
+	// Tromsø (69.65°N): near winter solstice the Moon spends multi-day
+	// stretches entirely above or below the horizon, so 30 winter days must
+	// yield noticeably fewer than one rise and one set per lunar day —
+	// proving the finder represents absence rather than fabricating events.
+	start := 2460295.5 // 2023-12-17
+	events, err := MoonriseMoonset(testEph, 69.6492, 18.9553, start, start+30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rises, sets int
+	for _, e := range events {
+		if e.NewValue == 1 {
+			rises++
+		} else {
+			sets++
+		}
+	}
+	if rises >= 29 && sets >= 29 {
+		t.Errorf("expected missing rise/set days at 69.6°N in winter, got %d rises %d sets", rises, sets)
+	}
+	if rises == 0 && sets == 0 {
+		t.Error("expected some moon events even at high latitude")
+	}
+}
