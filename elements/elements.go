@@ -15,25 +15,25 @@ const (
 
 // OsculatingElements holds a complete set of Keplerian orbital elements.
 type OsculatingElements struct {
-	SemiMajorAxisKm      float64 // a — semi-major axis in km (Inf for parabolic)
-	SemiMinorAxisKm      float64 // b — semi-minor axis in km
-	SemiLatusRectumKm    float64 // p — semi-latus rectum in km
-	Eccentricity         float64 // e — eccentricity (0=circular, <1=elliptic, 1=parabolic, >1=hyperbolic)
-	InclinationDeg       float64 // i — inclination in degrees
-	LongAscNodeDeg       float64 // Ω — longitude of ascending node in degrees
-	ArgPeriapsisDeg      float64 // ω — argument of periapsis in degrees
-	TrueAnomalyDeg       float64 // ν — true anomaly in degrees
-	EccentricAnomalyDeg  float64 // E — eccentric anomaly in degrees (hyperbolic anomaly for e>1)
-	MeanAnomalyDeg       float64 // M — mean anomaly in degrees
-	MeanMotionDegPerDay  float64 // n — mean motion in degrees/day
-	PeriapsisDistanceKm  float64 // q — periapsis distance in km
-	ApoapsisDistanceKm   float64 // Q — apoapsis distance in km (Inf for e≥1)
-	PeriodDays           float64 // P — orbital period in days (Inf for e≥1)
-	TrueLongitudeDeg     float64 // l — true longitude (Ω + ω + ν) in degrees
-	MeanLongitudeDeg     float64 // L — mean longitude (Ω + ω + M) in degrees
-	LongPeriapsisDeg     float64 // ϖ — longitude of periapsis (Ω + ω) in degrees
-	ArgLatitudeDeg       float64 // u — argument of latitude (ω + ν) in degrees
-	PeriapsisTimeDays    float64 // time of periapsis relative to epoch (days)
+	SemiMajorAxisKm     float64 // a — semi-major axis in km (Inf for parabolic)
+	SemiMinorAxisKm     float64 // b — semi-minor axis in km
+	SemiLatusRectumKm   float64 // p — semi-latus rectum in km
+	Eccentricity        float64 // e — eccentricity (0=circular, <1=elliptic, 1=parabolic, >1=hyperbolic)
+	InclinationDeg      float64 // i — inclination in degrees
+	LongAscNodeDeg      float64 // Ω — longitude of ascending node in degrees
+	ArgPeriapsisDeg     float64 // ω — argument of periapsis in degrees
+	TrueAnomalyDeg      float64 // ν — true anomaly in degrees
+	EccentricAnomalyDeg float64 // E — eccentric anomaly in degrees (hyperbolic anomaly for e>1)
+	MeanAnomalyDeg      float64 // M — mean anomaly in degrees
+	MeanMotionDegPerDay float64 // n — mean motion in degrees/day
+	PeriapsisDistanceKm float64 // q — periapsis distance in km
+	ApoapsisDistanceKm  float64 // Q — apoapsis distance in km (Inf for e≥1)
+	PeriodDays          float64 // P — orbital period in days (Inf for e≥1)
+	TrueLongitudeDeg    float64 // l — true longitude (Ω + ω + ν) in degrees
+	MeanLongitudeDeg    float64 // L — mean longitude (Ω + ω + M) in degrees
+	LongPeriapsisDeg    float64 // ϖ — longitude of periapsis (Ω + ω) in degrees
+	ArgLatitudeDeg      float64 // u — argument of latitude (ω + ν) in degrees
+	PeriapsisTimeDays   float64 // time of periapsis relative to epoch (days)
 }
 
 // FromStateVector computes osculating Keplerian orbital elements from a
@@ -152,25 +152,25 @@ func FromStateVector(posKm, velKmPerSec [3]float64, muKm3s2 float64) OsculatingE
 	argLat := math.Mod(w+nu+4*twoPi, twoPi)
 
 	return OsculatingElements{
-		SemiMajorAxisKm:      a,
-		SemiMinorAxisKm:      b,
-		SemiLatusRectumKm:    p,
-		Eccentricity:         e,
-		InclinationDeg:       inc * rad2deg,
-		LongAscNodeDeg:       omega * rad2deg,
-		ArgPeriapsisDeg:      w * rad2deg,
-		TrueAnomalyDeg:       nu * rad2deg,
-		EccentricAnomalyDeg:  E * rad2deg,
-		MeanAnomalyDeg:       M * rad2deg,
-		MeanMotionDegPerDay:  nMot * rad2deg * secPerDay,
-		PeriapsisDistanceKm:  q,
-		ApoapsisDistanceKm:   Q,
-		PeriodDays:           period,
-		TrueLongitudeDeg:     trueLon * rad2deg,
-		MeanLongitudeDeg:     meanLon * rad2deg,
-		LongPeriapsisDeg:     longPeri * rad2deg,
-		ArgLatitudeDeg:       argLat * rad2deg,
-		PeriapsisTimeDays:    tPeri,
+		SemiMajorAxisKm:     a,
+		SemiMinorAxisKm:     b,
+		SemiLatusRectumKm:   p,
+		Eccentricity:        e,
+		InclinationDeg:      inc * rad2deg,
+		LongAscNodeDeg:      omega * rad2deg,
+		ArgPeriapsisDeg:     w * rad2deg,
+		TrueAnomalyDeg:      nu * rad2deg,
+		EccentricAnomalyDeg: E * rad2deg,
+		MeanAnomalyDeg:      M * rad2deg,
+		MeanMotionDegPerDay: nMot * rad2deg * secPerDay,
+		PeriapsisDistanceKm: q,
+		ApoapsisDistanceKm:  Q,
+		PeriodDays:          period,
+		TrueLongitudeDeg:    trueLon * rad2deg,
+		MeanLongitudeDeg:    meanLon * rad2deg,
+		LongPeriapsisDeg:    longPeri * rad2deg,
+		ArgLatitudeDeg:      argLat * rad2deg,
+		PeriapsisTimeDays:   tPeri,
 	}
 }
 

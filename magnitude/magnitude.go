@@ -130,7 +130,7 @@ func venus(r, delta, phi float64) float64 {
 	if phi < 163.7 {
 		pf = phi * (-1.044e-03 + phi*(3.687e-04+phi*(-2.814e-06+phi*8.938e-09)))
 	} else {
-		pf = (236.05828+4.384) + phi*(-2.81914e+00+phi*8.39034e-03)
+		pf = (236.05828 + 4.384) + phi*(-2.81914e+00+phi*8.39034e-03)
 	}
 	return -4.384 + dm + pf
 }

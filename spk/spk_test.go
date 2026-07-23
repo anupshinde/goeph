@@ -238,7 +238,7 @@ func TestOpenUnsupportedType(t *testing.T) {
 	soff := off + 24
 	// 2 doubles (start_sec, end_sec) + 6 ints packed as 3 doubles
 	// ints: target=10, center=0, frame=1, dataType=13 (unsupported), startI=1, endI=100
-	intOff := soff + 16 // after 2 doubles
+	intOff := soff + 16                                 // after 2 doubles
 	binary.LittleEndian.PutUint32(buf[intOff:], 10)     // target
 	binary.LittleEndian.PutUint32(buf[intOff+4:], 0)    // center
 	binary.LittleEndian.PutUint32(buf[intOff+8:], 1)    // frame
@@ -268,12 +268,12 @@ func TestChainBuilding(t *testing.T) {
 		name    string
 		wantLen int // number of links in chain
 	}{
-		{Sun, "Sun", 1},               // 10 → 0
+		{Sun, "Sun", 1},                 // 10 → 0
 		{MercuryBarycenter, "MBary", 1}, // 1 → 0
-		{Mercury, "Mercury", 2},       // 199 → 1 → 0
-		{Venus, "Venus", 2},           // 299 → 2 → 0
-		{Moon, "Moon", 2},             // 301 → 3 → 0
-		{Earth, "Earth", 2},           // 399 → 3 → 0
+		{Mercury, "Mercury", 2},         // 199 → 1 → 0
+		{Venus, "Venus", 2},             // 299 → 2 → 0
+		{Moon, "Moon", 2},               // 301 → 3 → 0
+		{Earth, "Earth", 2},             // 399 → 3 → 0
 		{MarsBarycenter, "MarsBary", 1}, // 4 → 0
 	}
 
@@ -389,7 +389,7 @@ func TestApparentGolden(t *testing.T) {
 	// - Light-time correction in Skyfield's observe() adds ~20 arcsec offset
 	//
 	// We use a combined tolerance: max(absTol, relTol * distance).
-	const absTol = 50.0  // km — covers nearby bodies (Moon, Sun)
+	const absTol = 50.0   // km — covers nearby bodies (Moon, Sun)
 	const relTol = 1.5e-5 // fractional — covers ~3 arcsec angular error for distant bodies
 	failures := 0
 	maxDiff := 0.0
@@ -488,12 +488,12 @@ func TestVelocityAllBodies(t *testing.T) {
 		minKmSec float64 // minimum expected speed in km/s
 		maxKmSec float64
 	}{
-		{Sun, "Sun", 0.001, 2.0},          // Sun moves slowly around SSB
-		{Mercury, "Mercury", 30, 60},       // Mercury: fast, eccentric
-		{Venus, "Venus", 30, 40},           // Venus: ~35 km/s
-		{Earth, "Earth", 25, 35},           // Earth: ~30 km/s
-		{Moon, "Moon", 25, 36},             // Moon: similar to Earth + ~1 km/s
-		{MarsBarycenter, "Mars", 20, 30},   // Mars: ~24 km/s
+		{Sun, "Sun", 0.001, 2.0},         // Sun moves slowly around SSB
+		{Mercury, "Mercury", 30, 60},     // Mercury: fast, eccentric
+		{Venus, "Venus", 30, 40},         // Venus: ~35 km/s
+		{Earth, "Earth", 25, 35},         // Earth: ~30 km/s
+		{Moon, "Moon", 25, 36},           // Moon: similar to Earth + ~1 km/s
+		{MarsBarycenter, "Mars", 20, 30}, // Mars: ~24 km/s
 	}
 
 	for _, tc := range bodies {

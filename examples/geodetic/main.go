@@ -17,9 +17,9 @@ import (
 func main() {
 	// Observatory locations
 	observatories := []struct {
-		name    string
-		latDeg  float64
-		lonDeg  float64
+		name   string
+		latDeg float64
+		lonDeg float64
 	}{
 		{"Greenwich, UK", 51.4769, -0.0005},
 		{"Mauna Kea, Hawaii", 19.8208, -155.4681},

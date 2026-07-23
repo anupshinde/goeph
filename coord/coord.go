@@ -224,23 +224,23 @@ func nutationAnglesFull(T float64) (dpsiRad, depsRad float64) {
 			float64(n[3])*fa[3] + float64(n[4])*fa[4]
 		sinArg, cosArg := math.Sincos(arg)
 		lc := &luniSolarLonCoeffs[i]
-		dpsi += (lc[0] + lc[1]*T)*sinArg + lc[2]*cosArg
+		dpsi += (lc[0]+lc[1]*T)*sinArg + lc[2]*cosArg
 		oc := &luniSolarOblCoeffs[i]
-		deps += (oc[0] + oc[1]*T)*cosArg + oc[2]*sinArg
+		deps += (oc[0]+oc[1]*T)*cosArg + oc[2]*sinArg
 	}
 
 	// --- Planetary nutation (687 terms) ---
 	// Planetary fundamental arguments (mean longitudes, radians)
 	pa := [14]float64{
 		fa[0], fa[1], fa[2], fa[3], fa[4], // Delaunay args
-		4.402608842 + 2608.7903141574*T,    // Mercury
-		3.176146697 + 1021.3285546211*T,    // Venus
-		1.753470314 + 628.3075849991*T,     // Earth
-		6.203480913 + 334.0612426700*T,     // Mars
-		0.599546497 + 52.9690962641*T,      // Jupiter
-		0.874016757 + 21.3299104960*T,      // Saturn
-		5.481293872 + 7.4781598567*T,       // Uranus
-		5.311886287 + 3.8133035638*T,       // Neptune
+		4.402608842 + 2608.7903141574*T,     // Mercury
+		3.176146697 + 1021.3285546211*T,     // Venus
+		1.753470314 + 628.3075849991*T,      // Earth
+		6.203480913 + 334.0612426700*T,      // Mars
+		0.599546497 + 52.9690962641*T,       // Jupiter
+		0.874016757 + 21.3299104960*T,       // Saturn
+		5.481293872 + 7.4781598567*T,        // Uranus
+		5.311886287 + 3.8133035638*T,        // Neptune
 		(0.024381750 + 0.00000538691*T) * T, // general precession
 	}
 

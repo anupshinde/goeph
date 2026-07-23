@@ -2,7 +2,7 @@ package spk
 
 // NAIF body ID constants used in JPL ephemeris files.
 const (
-	SSB               = 0   // Solar System Barycenter
+	SSB               = 0 // Solar System Barycenter
 	MercuryBarycenter = 1
 	VenusBarycenter   = 2
 	EarthMoonBary     = 3 // Earth-Moon Barycenter

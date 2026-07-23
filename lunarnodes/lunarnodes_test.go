@@ -174,15 +174,15 @@ func TestTrueNode_Golden(t *testing.T) {
 // — a well-tested function in an established astronomy library. Skyfield's code
 // path differs from goeph's:
 //
-//   Skyfield osculating_elements_of(ECLIPJ2000):
-//     1. Rotates r, v from ICRF to ecliptic frame via 3×3 matrix
-//     2. Computes h = r' × v' in the ecliptic frame
-//     3. Extracts Ω = atan2(h[0], -h[1]) using its own Angle type
+//	Skyfield osculating_elements_of(ECLIPJ2000):
+//	  1. Rotates r, v from ICRF to ecliptic frame via 3×3 matrix
+//	  2. Computes h = r' × v' in the ecliptic frame
+//	  3. Extracts Ω = atan2(h[0], -h[1]) using its own Angle type
 //
-//   goeph TrueNode():
-//     1. Computes h = r × v in ICRF (no frame rotation)
-//     2. Computes n = ecliptic_pole × normalize(h) (node line in ICRF)
-//     3. Converts n to ecliptic longitude via coord.ICRFToEcliptic()
+//	goeph TrueNode():
+//	  1. Computes h = r × v in ICRF (no frame rotation)
+//	  2. Computes n = ecliptic_pole × normalize(h) (node line in ICRF)
+//	  3. Converts n to ecliptic longitude via coord.ICRFToEcliptic()
 //
 // The math is equivalent, but the code paths are different: Skyfield uses its
 // own Distance/Velocity/Angle types, its own cross product, and rotates vectors
@@ -292,7 +292,8 @@ func TestTrueNode_Range(t *testing.T) {
 // vs ephemeris-derived r×v) must agree on the physical properties of the node.
 //
 // Measured results (20 years from J2000, 1-day step):
-//   Max |diff|: 2.0859°   RMS: 1.0858°   Mean diff: -0.1386°
+//
+//	Max |diff|: 2.0859°   RMS: 1.0858°   Mean diff: -0.1386°
 func TestTrueNode_ValidationAgainstMean(t *testing.T) {
 	eph := loadEphemeris(t)
 
@@ -330,8 +331,9 @@ func TestTrueNode_ValidationAgainstMean(t *testing.T) {
 // the hypothesis (which failed). They serve as regression guards.
 //
 // Measured results (300 years, 30-day step, 3653 samples):
-//   Max |diff|: 3.8602°   RMS: 1.6195°   Mean diff: -0.0029°
-//   Outliers > 2.5°: all in 1850-1945 (positive) and 2054-2149 (negative)
+//
+//	Max |diff|: 3.8602°   RMS: 1.6195°   Mean diff: -0.0029°
+//	Outliers > 2.5°: all in 1850-1945 (positive) and 2054-2149 (negative)
 func TestTrueNode_ValidationAgainstMean_FullRange(t *testing.T) {
 	eph := loadEphemeris(t)
 

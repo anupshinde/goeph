@@ -715,7 +715,7 @@ func TestITRFToGeodetic_Altitude(t *testing.T) {
 func TestIsSunlit_InSunlight(t *testing.T) {
 	// Object between Earth and Sun (closer to Earth) — should be sunlit
 	sunPos := [3]float64{1.5e8, 0, 0} // Sun at ~1 AU
-	objPos := [3]float64{42000, 0, 0}  // GEO orbit, same direction as Sun
+	objPos := [3]float64{42000, 0, 0} // GEO orbit, same direction as Sun
 	if !IsSunlit(objPos, sunPos) {
 		t.Error("object in front of Earth toward Sun should be sunlit")
 	}
@@ -756,7 +756,7 @@ func TestIsBehindEarth(t *testing.T) {
 func TestTEMEToICRF_PreservesMagnitude(t *testing.T) {
 	// Rotation should preserve vector magnitude
 	posTEME := [3]float64{6778.0, 1234.0, -3456.0} // typical LEO position, km
-	jd := 2451545.0 + 365.25*10                     // 10 years from J2000
+	jd := 2451545.0 + 365.25*10                    // 10 years from J2000
 
 	posICRF := TEMEToICRF(posTEME, jd)
 

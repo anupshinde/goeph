@@ -14,10 +14,10 @@ import "math"
 type Projector struct {
 	// Pre-computed constants for the projection.
 	xc, yc, zc float64 // center unit vector
-	t0          float64 // 1 / sqrt(xc² + yc²)
-	t2          float64 // sqrt(1 - zc²)
-	t3          float64 // t0 * t2
-	t6base      float64 // t0 * zc
+	t0         float64 // 1 / sqrt(xc² + yc²)
+	t2         float64 // sqrt(1 - zc²)
+	t3         float64 // t0 * t2
+	t6base     float64 // t0 * zc
 }
 
 // NewProjector creates a stereographic projection centered at the given
