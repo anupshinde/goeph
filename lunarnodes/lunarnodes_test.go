@@ -405,23 +405,45 @@ func TestTrueNode_ValidationAgainstMean_FullRange(t *testing.T) {
 }
 
 func TestMeanLunarNodeICRF_ConsistentWithMeanLunarNodes(t *testing.T) {
-	// MeanLunarNodeICRF converted to J2000 ecliptic longitude should match
-	// MeanLunarNodes exactly.
+	// MeanLunarNodeICRF converted to the mean ecliptic of date (the frame
+	// MeanLunarNodes is measured in) must give MeanLunarNodes back, on the
+	// ecliptic (latitude 0).
+	frame := coord.MeanEclipticOfDateFrame()
+	wrap := func(d float64) float64 { return math.Mod(d+540, 360) - 180 }
 	dates := []float64{2415020.5, 2433282.5, 2451545.0, 2458849.5, 2469807.5}
 	for _, jd := range dates {
 		expectedN, expectedS := MeanLunarNodes(jd)
 		northICRF, southICRF := MeanLunarNodeICRF(jd)
 
-		_, gotN := coord.ICRFToEcliptic(northICRF[0], northICRF[1], northICRF[2])
-		_, gotS := coord.ICRFToEcliptic(southICRF[0], southICRF[1], southICRF[2])
+		latN, gotN := frame.LatLon(northICRF, jd)
+		latS, gotS := frame.LatLon(southICRF, jd)
 
-		if math.Abs(gotN-expectedN) > 1e-10 {
-			t.Errorf("jd=%.1f: north lon mismatch: ICRF→ecl=%.10f° vs MeanLunarNodes=%.10f°",
-				jd, gotN, expectedN)
+		if math.Abs(wrap(gotN-expectedN)) > 1e-9 || math.Abs(latN) > 1e-9 {
+			t.Errorf("jd=%.1f: north = (lon %.10f°, lat %.2e°), want (%.10f°, 0)",
+				jd, gotN, latN, expectedN)
 		}
-		if math.Abs(gotS-expectedS) > 1e-10 {
-			t.Errorf("jd=%.1f: south lon mismatch: ICRF→ecl=%.10f° vs MeanLunarNodes=%.10f°",
-				jd, gotS, expectedS)
+		if math.Abs(wrap(gotS-expectedS)) > 1e-9 || math.Abs(latS) > 1e-9 {
+			t.Errorf("jd=%.1f: south = (lon %.10f°, lat %.2e°), want (%.10f°, 0)",
+				jd, gotS, latS, expectedS)
+		}
+	}
+}
+
+func TestMeanLunarNodeICRF_J2000DiffersByPrecession(t *testing.T) {
+	// Read in the J2000 ecliptic, the mean node is shifted by the precession
+	// since J2000 (~50.3″/yr): about +22′ in 2026 and −84′ in 1900.
+	wrap := func(d float64) float64 { return math.Mod(d+540, 360) - 180 }
+	for _, c := range []struct {
+		jd, wantArcmin float64
+	}{
+		{2461041.5, -22.1}, // 2026-01-01: the of-date longitude is 22′ larger
+		{2415020.5, 83.8},  // 1900-01-01
+	} {
+		expected, _ := MeanLunarNodes(c.jd)
+		n, _ := MeanLunarNodeICRF(c.jd)
+		_, j2000Lon := coord.ICRFToEcliptic(n[0], n[1], n[2])
+		if got := wrap(j2000Lon-expected) * 60; math.Abs(got-c.wantArcmin) > 1.0 {
+			t.Errorf("jd=%.1f: J2000 − of-date longitude = %+.2f′, want ~%+.1f′", c.jd, got, c.wantArcmin)
 		}
 	}
 }
