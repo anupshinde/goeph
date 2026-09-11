@@ -13,6 +13,7 @@ make build                        # build all packages
 make build-examples               # compile-check all examples
 make test                         # run all tests
 make test-v                       # run all tests (verbose)
+make test-race                    # run all tests under the race detector
 make cover                        # run tests with coverage summary
 make cover-html                   # generate HTML coverage report
 make vet                          # static analysis
@@ -36,7 +37,7 @@ The library is organized as independent packages with no circular dependencies:
 - **`search/`** — Generic event search primitives: `FindDiscrete` (bisection for discrete state changes, ~1ms precision), `FindMaxima`/`FindMinima` (golden section for extrema, ~1s precision). Foundation for all almanac features.
 - **`almanac/`** — Astronomical event finding built on `search/`: `Seasons`, `MoonPhases`, `SunriseSunset`, `Twilight`, `Risings`, `Settings`, `Transits`, `OppositionsConjunctions`. All functions take `*spk.SPK` + time range, return `[]search.DiscreteEvent`. Golden-tested against Skyfield.
 - **`satellite/`** — Wrapper around `go-satellite` for SGP4 propagation, with TEME→ICRF conversion. `FindEvents()` detects satellite rise/culmination/set times for a ground observer using `search.FindDiscrete` + `search.FindMaxima`.
-- **`star/`** — `Star` type with proper motion (RA/Dec rates), parallax, and radial velocity propagation from catalog epoch. `PositionAU()`, `PositionKm()`, `RADec()` methods. Also provides `GalacticCenterICRF()` direction.
+- **`star/`** — `Star` type with proper motion (RA/Dec rates), parallax, and radial velocity propagation from catalog epoch. `PositionAU()`, `PositionKm()`, `RADec()` methods. A `Star` holds only its catalog parameters (no cached state), so it is safe for concurrent use and safe to copy. Also provides `GalacticCenterICRF()` direction.
 - **`kepler/`** — Keplerian orbit propagation for asteroids and comets. `Orbit` type supports elliptic (Newton-Raphson), parabolic (Barker's equation), and hyperbolic orbits. Elements in J2000 ecliptic frame, output in ICRF. Supports both asteroid (a, e, M0) and comet (q, e, Tp) element sets.
 - **`eclipse/`** — Lunar and solar eclipse detection. `FindLunarEclipses()` finds penumbral, partial, and total lunar eclipses in a date range with Danjon 2% enlargement. `ClassifyLunarEclipse()` classifies a single instant. `ClassifySolarEclipse()` determines solar eclipse type (total/annular/partial) at a given time using geocentric shadow cone geometry (Moon's umbral/penumbral cones intersected with Earth's disk). Solar classification is geocentric only (no topocentric parallax); suitable for chart-level flags.
 - **`projection/`** — Stereographic projection of sky positions onto a 2D plane for star charts. `NewProjector()` creates a projection centered at any direction, `Project()` maps 3D positions to 2D coordinates. Conformal (angle-preserving).

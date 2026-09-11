@@ -27,6 +27,10 @@ const (
 
 // Star represents a fixed star with optional proper motion, parallax, and
 // radial velocity for astrometric propagation from catalog epoch to any date.
+//
+// A Star holds only its catalog parameters. Its methods compute from them on
+// every call and never modify the Star, so one Star is safe for concurrent
+// use by multiple goroutines and can be copied freely.
 type Star struct {
 	// RAHours is the right ascension at epoch in hours (0-24).
 	RAHours float64
@@ -51,21 +55,11 @@ type Star struct {
 	// Epoch is the catalog epoch as a TDB Julian date.
 	// If zero, J2000.0 (2451545.0) is used.
 	Epoch float64
-
-	// precomputed ICRF position (AU) and velocity (AU/day)
-	posAU [3]float64
-	velAU [3]float64
-	ready bool
 }
 
-// init precomputes the ICRF position and velocity vectors from the catalog
-// parameters. Called lazily on first use.
-func (s *Star) init() {
-	if s.ready {
-		return
-	}
-	s.ready = true
-
+// vectors returns the ICRF position (AU) and velocity (AU/day) at the catalog
+// epoch, computed from the catalog parameters.
+func (s *Star) vectors() (posAU, velAU [3]float64) {
 	ra := s.RAHours * 15.0 * math.Pi / 180.0 // radians
 	dec := s.DecDeg * math.Pi / 180.0        // radians
 
@@ -82,7 +76,7 @@ func (s *Star) init() {
 	cosRA := math.Cos(ra)
 	sinRA := math.Sin(ra)
 
-	s.posAU = [3]float64{
+	posAU = [3]float64{
 		distance * cosDec * cosRA,
 		distance * cosDec * sinRA,
 		distance * sinDec,
@@ -95,18 +89,19 @@ func (s *Star) init() {
 	pmd := (s.DecMasPerYear / (parallax * 365.25)) * k // AU/day
 	rvl := (s.RadialKmPerS * 86400.0 / auKm) * k       // AU/day
 
-	s.velAU = [3]float64{
+	velAU = [3]float64{
 		-pmr*sinRA - pmd*sinDec*cosRA + rvl*cosDec*cosRA,
 		pmr*cosRA - pmd*sinDec*sinRA + rvl*cosDec*sinRA,
 		pmd*cosDec + rvl*sinDec,
 	}
+	return posAU, velAU
 }
 
 // PositionAU returns the ICRF position of the star in AU at the given TDB
 // Julian date, propagated from the catalog epoch using proper motion and
 // radial velocity. No light-time correction is applied.
 func (s *Star) PositionAU(tdbJD float64) [3]float64 {
-	s.init()
+	posAU, velAU := s.vectors()
 	epoch := s.Epoch
 	if epoch == 0 {
 		epoch = j2000
@@ -114,9 +109,9 @@ func (s *Star) PositionAU(tdbJD float64) [3]float64 {
 	dt := tdbJD - epoch // days
 
 	return [3]float64{
-		s.posAU[0] + s.velAU[0]*dt,
-		s.posAU[1] + s.velAU[1]*dt,
-		s.posAU[2] + s.velAU[2]*dt,
+		posAU[0] + velAU[0]*dt,
+		posAU[1] + velAU[1]*dt,
+		posAU[2] + velAU[2]*dt,
 	}
 }
 
