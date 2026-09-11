@@ -19,7 +19,8 @@ const (
 )
 
 // MeanLunarNodes returns the mean North and South node ecliptic longitudes
-// (degrees) for the given TDB Julian date. Uses Meeus formula.
+// (degrees) for the given TDB Julian date, measured from the mean equinox
+// on the mean ecliptic of date. Uses Meeus formula.
 // Note: This is not derived from Skyfield — it was added independently.
 func MeanLunarNodes(tdbJD float64) (northLon, southLon float64) {
 	T := (tdbJD - j2000JD) / 36525.0
@@ -37,6 +38,7 @@ func MeanLunarNodes(tdbJD float64) (northLon, southLon float64) {
 // TrueNode returns the ecliptic J2000 longitude (degrees) of the Moon's
 // instantaneous ascending and descending nodes, computed from the Moon's
 // geocentric state vectors (position and velocity) using the loaded SPK ephemeris.
+// The nodes are where the orbit crosses the J2000 mean ecliptic plane.
 func TrueNode(eph *spk.SPK, tdbJD float64) (northLon, southLon float64) {
 	r := eph.GeocentricPosition(spk.Moon, tdbJD)
 	v := eph.GeocentricVelocity(spk.Moon, tdbJD)
@@ -58,17 +60,25 @@ func TrueNode(eph *spk.SPK, tdbJD float64) (northLon, southLon float64) {
 }
 
 // MeanLunarNodeICRF returns unit ICRF direction vectors for the mean North
-// and South lunar nodes at the given TDB Julian date. Uses the same Meeus
-// formula as MeanLunarNodes, converted from J2000 ecliptic longitude to ICRF.
+// and South lunar nodes at the given TDB Julian date. It places the
+// MeanLunarNodes longitude on the mean ecliptic of date (the frame that
+// longitude is measured in) and rotates that point to ICRF, so converting
+// the vectors with any frame gives the mean node in that frame.
 func MeanLunarNodeICRF(tdbJD float64) (north, south [3]float64) {
 	northLon, _ := MeanLunarNodes(tdbJD)
 	lonRad := northLon * deg2rad
+	cosL, sinL := math.Cos(lonRad), math.Sin(lonRad)
 
-	// Unit vector in J2000 ecliptic: (cos λ, sin λ, 0)
-	ex, ey := math.Cos(lonRad), math.Sin(lonRad)
-
-	// Ecliptic → ICRF: rotate around X by -ε (inverse of ICRF→ecliptic Rx(+ε))
-	north = [3]float64{ex, eclipticPoleCosE * ey, eclipticPoleSinE * ey}
+	// m rotates ICRF into the mean ecliptic of date, so its rows are that
+	// frame's x and y axes expressed in ICRF. The point (cos λ, sin λ, 0) in
+	// the frame is therefore cos λ·row0 + sin λ·row1 in ICRF.
+	m := coord.MeanEclipticOfDateFrame().MatrixAt(tdbJD)
+	for i := 0; i < 3; i++ {
+		north[i] = cosL*m[0][i] + sinL*m[1][i]
+	}
+	// The composed frame matrix is orthonormal only to ~1e-15; renormalise
+	// so the result is a unit vector to machine precision.
+	north = unit3(north)
 	south = [3]float64{-north[0], -north[1], -north[2]}
 	return
 }
@@ -76,6 +86,11 @@ func MeanLunarNodeICRF(tdbJD float64) (north, south [3]float64) {
 // TrueNodeICRF returns unit ICRF direction vectors for the true (instantaneous)
 // North and South lunar nodes at the given TDB Julian date, computed from the
 // Moon's geocentric state vectors via the loaded SPK ephemeris.
+//
+// Like TrueNode, the nodes are where the orbit crosses the J2000 mean
+// ecliptic plane. Converting these vectors to another frame gives that same
+// point expressed in the other frame, not the node on that frame's ecliptic
+// (the two differ by up to a few arcminutes over 1900–2100).
 func TrueNodeICRF(eph *spk.SPK, tdbJD float64) (north, south [3]float64) {
 	r := eph.GeocentricPosition(spk.Moon, tdbJD)
 	v := eph.GeocentricVelocity(spk.Moon, tdbJD)
