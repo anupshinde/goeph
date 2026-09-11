@@ -1,4 +1,4 @@
-.PHONY: build build-examples test test-v cover cover-html vet clean
+.PHONY: build build-examples test test-v test-race cover cover-html vet clean
 
 # Build all packages (excluding examples)
 build:
@@ -15,6 +15,10 @@ test:
 # Run all tests with verbose output
 test-v:
 	go test -v ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/ ./projection/ ./constellation/
+
+# Run all tests under the race detector
+test-race:
+	go test -race ./spk/ ./coord/ ./timescale/ ./satellite/ ./star/ ./lunarnodes/ ./units/ ./geometry/ ./elements/ ./magnitude/ ./search/ ./almanac/ ./kepler/ ./eclipse/ ./projection/ ./constellation/
 
 # Run tests with coverage and print summary
 cover:
