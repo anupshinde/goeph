@@ -123,6 +123,8 @@ func main() {
 }
 ```
 
+Positions outside the loaded files' span are extrapolated, not errors. Check with `eph.Covers(body, tdbJD)`; `eph.Coverage(body)` returns the span (de440s: 1849-12-26 to 2150-01-22).
+
 ## Examples
 
 ```bash
