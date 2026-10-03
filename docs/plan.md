@@ -93,8 +93,8 @@ No external data files needed, but require meaningful implementation.
 - **Notes**: Full Lorentz transformation matching Skyfield's `add_aberration()`. Vector helpers in `coord/vec3.go`.
 
 ### Gravitational light deflection — IMPLEMENTED
-- **Where**: `coord/deflection.go` — `Deflection(position, pe, rmass)`
-- **Notes**: PPN formula matching Skyfield's `_compute_deflection()`. Default deflectors: Sun (rmass=1.0), Jupiter (1047.3486), Saturn (3497.898).
+- **Where**: `coord/deflection.go` — `Deflection(position, deflectorToObserver, rmass)`
+- **Notes**: PPN formula. The second argument runs from the deflecting body to the observer, taken at the ray's closest approach to it; the deflector-to-target vector is recovered as the sum of the two. Default deflectors: Sun (rmass=1.0), Jupiter (1047.3486), Saturn (3497.898). Reduces to 2·GM/(c²E)·(1+cos χ)/sin χ for a distant source, 1.75″ for a ray grazing the Sun's limb, and vanishes for a deflector behind the observer.
 
 ### Apparent positions — IMPLEMENTED
 - **Where**: `spk/spk.go` — `Apparent(body, tdbJD)`, `ApparentFrom(observer, target, tdbJD)`

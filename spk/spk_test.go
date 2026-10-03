@@ -383,14 +383,17 @@ func TestApparentGolden(t *testing.T) {
 	eph := openEph(t)
 	golden := loadGoldenApparent(t)
 
-	// Apparent positions differ from Skyfield due to:
-	// - Underlying astrometric positions differ by up to 0.01 km
-	// - Aberration (~20 arcsec rotation) amplifies direction errors at large distances
-	// - Light-time correction in Skyfield's observe() adds ~20 arcsec offset
+	// Apparent positions agree with Skyfield to 0.002 km absolute and 1.7e-9
+	// of the distance (~0.3 mas) across the golden set, the remainder coming
+	// from the underlying astrometric positions. The tolerance is kept close
+	// to that: deflection reaches only 1.75 arcsec even for a ray grazing the
+	// Sun, so a loose bound here cannot tell a correct deflection from none at
+	// all — an earlier sign error in the deflector geometry, worth 2 arcsec on
+	// this set, passed a 3 arcsec tolerance unnoticed.
 	//
 	// We use a combined tolerance: max(absTol, relTol * distance).
-	const absTol = 50.0   // km — covers nearby bodies (Moon, Sun)
-	const relTol = 1.5e-5 // fractional — covers ~3 arcsec angular error for distant bodies
+	const absTol = 0.05 // km — covers nearby bodies (Moon, Sun)
+	const relTol = 1e-8 // fractional — ~2 mas of angular error for distant bodies
 	failures := 0
 	maxDiff := 0.0
 	maxRelDiff := 0.0

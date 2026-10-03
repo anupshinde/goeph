@@ -442,15 +442,20 @@ func (s *SPK) ApparentFrom(observer, target int, tdbJD float64) [3]float64 {
 		dPos := s.bodyWrtSSB(d.body, tdbJD)
 		gpv := sub3(dPos, obsPos) // observer-to-deflector at observation time
 
-		// Compute light-time to the closest-approach point on the ray
+		// The photon reaching the observer at tdbJD travelled towards it along
+		// -position, leaving the target at tdbJD-lightTime. Its closest
+		// approach to the deflector is the projection of the observer-to-
+		// deflector vector onto that line, so the photon passed that point
+		// dlt days before arriving. Clamp to the stretch the photon actually
+		// travelled: beyond the observer (dlt < 0) use the observation time,
+		// beyond the target use the emission time.
 		dlt := dot3(position, gpv) / (cKmPerDay * posMag)
-		tclose := tdbJD - lightTime + dlt
+		tclose := tdbJD - math.Min(math.Max(dlt, 0), lightTime)
 
-		// Re-evaluate deflector position at the closest-approach time
+		// Re-evaluate the deflector's position at that instant.
 		dPos = s.bodyWrtSSB(d.body, tclose)
-		pe := sub3(dPos, obsPos)
 
-		correction := coord.Deflection(position, pe, d.rmass)
+		correction := coord.Deflection(position, sub3(obsPos, dPos), d.rmass)
 		position = add3(position, correction)
 	}
 
