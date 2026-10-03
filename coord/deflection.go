@@ -13,11 +13,20 @@ const (
 // Returns the deflection correction vector in km (to be added to the position).
 //
 // position is the observer-to-target vector in km (astrometric position).
-// pe is the observer-to-deflector vector in km (same sign convention as Skyfield).
+// deflectorToObserver runs from the deflecting body to the observer, in km,
+// taken at the time the light ray passed closest to the deflector. Note the
+// direction: the expression below needs both of the deflector's own vectors,
+// to the observer and to the target, and recovers the second as
+// position + deflectorToObserver.
 // rmass is the reciprocal mass: GM_sun / GM_deflector (1.0 for the Sun).
 //
-// Matches Skyfield's _compute_deflection() in relativity.py.
-func Deflection(position, pe [3]float64, rmass float64) [3]float64 {
+// For a target far behind the deflector the result is the classical
+// deflection 2·GM/(c²·E) · (1 + cos χ)/sin χ, where E is the observer's
+// distance from the deflector and χ the angle between them as seen by the
+// observer — 1.75″ for a ray grazing the Sun's limb. The deflection always
+// moves the apparent position away from the deflector.
+func Deflection(position, deflectorToObserver [3]float64, rmass float64) [3]float64 {
+	pe := deflectorToObserver
 	// Vector from deflector to target
 	pq := add3(position, pe)
 
@@ -40,7 +49,8 @@ func Deflection(position, pe [3]float64, rmass float64) [3]float64 {
 	edotp := dot3(ehat, phat)
 
 	// If deflector is on the line toward or away from the target (within ~1 arcsec),
-	// skip deflection to avoid numerical issues.
+	// skip deflection to avoid numerical issues. A ray through the deflector's
+	// centre sends 1 + qdote to zero, which is the singularity this guards.
 	if math.Abs(edotp) > 0.99999999999 {
 		return [3]float64{}
 	}
