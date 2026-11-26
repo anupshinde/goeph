@@ -1,8 +1,10 @@
 // Example: Identify which constellation a planet is in
 //
 // Demonstrates looking up the IAU constellation for planet positions.
-// Uses J2000 RA/Dec coordinates, which are close enough to the B1875
-// epoch used by constellation boundaries for practical purposes.
+// Uses J2000 RA/Dec coordinates for brevity. The boundaries are defined in
+// B1875.0 coordinates, up to about 1.7° away, so a body within a couple of
+// degrees of a boundary can be misplaced; precess to B1875.0 when that
+// matters.
 package main
 
 import (
