@@ -5,10 +5,15 @@
 // data (Roman 1987, CDS catalog VI/42). Binary search on RA and declination
 // gives O(log n) lookup time with no linear scanning.
 //
-// Positions should be given in epoch B1875 equatorial coordinates, which is the
-// standard epoch for constellation boundaries. For most practical purposes, J2000
-// coordinates work fine — the precession difference is ~1.4° over 125 years, which
-// only matters for positions very close to a constellation boundary.
+// Positions must be given in B1875.0 equatorial coordinates (mean equator and
+// equinox of B1875.0), the epoch the boundaries are defined in. The grid
+// moves with precession, about 1.4° a century, so J2000 coordinates can be
+// up to about 1.7° off, most for points near the ecliptic. A body more than
+// a couple of degrees inside a constellation is still found correctly, but
+// any position near a boundary, and any date at which a moving point crosses
+// one, will be wrong. The March equinox, for example, enters Aquarius in
+// 2597 on the B1875.0 grid, but J2000 coordinates put it in 2722, 125 years
+// late. Precess positions to B1875.0 first.
 package constellation
 
 import "sort"
@@ -17,8 +22,9 @@ import "sort"
 // given position. raHours is right ascension in hours [0, 24) and decDeg is
 // declination in degrees [-90, 90].
 //
-// The boundaries use epoch B1875 coordinates (the standard for IAU constellation
-// boundaries). J2000 coordinates are acceptable for most purposes.
+// The boundaries use epoch B1875.0 coordinates (the standard for IAU
+// constellation boundaries). J2000 coordinates can be up to about 1.7° off
+// and give wrong answers near a boundary; see the package documentation.
 func At(raHours, decDeg float64) string {
 	i := sort.SearchFloat64s(sortedRA[:], raHours)
 	j := sort.Search(len(sortedDec), func(k int) bool {
